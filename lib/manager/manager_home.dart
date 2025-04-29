@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:mess_management/manager/add_meal_details.dart';
+import 'package:mess_management/manager/add_meal_planning.dart';
 import 'package:mess_management/manager/add_shopping.dart';
 import 'package:mess_management/manager/manager_messaging.dart';
 import 'package:mess_management/manager/meal_member.dart';
@@ -231,7 +231,7 @@ class _ManagerHomeState extends State<ManagerHome> {
               title: const Text('Meal planning'),
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => AddMealDetails(selectedDate: DateTime.now(),)),
+                MaterialPageRoute(builder: (context) => AddMealPlanning()),
               ),
             ),
             ListTile(

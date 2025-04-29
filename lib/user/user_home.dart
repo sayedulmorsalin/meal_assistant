@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mess_management/manager/manager_home.dart';
 import 'package:mess_management/user/history.dart';
 import 'package:mess_management/user/masseging.dart';
-import 'package:mess_management/user/meal%20details.dart';
+import 'package:mess_management/user/meal_planning.dart';
 import 'package:mess_management/user/profile.dart';
 import 'package:mess_management/user/shopping.dart';
 import 'package:mess_management/user/transaction.dart';
@@ -348,13 +348,13 @@ class _UserHomeState extends State {
             ),
             ListTile(
               leading: const Icon(Icons.list),
-              title: const Text('Meal details'),
+              title: const Text('Meal planning'),
               onTap: () {
                 Navigator.pop(context);
 
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => Meal_details()),
+                  MaterialPageRoute(builder: (context) => MealPlanning()),
 
                 );
                 // Add history navigation
