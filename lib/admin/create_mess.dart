@@ -13,10 +13,11 @@ class _CreateMessState extends State<CreateMess> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: Colors.black87,
         title: Text(
           "Create New Meal System",
           style: TextStyle(
-            color: Colors.black,
+            color: Colors.white,
             fontSize: 30,
             fontWeight: FontWeight.bold,
           ),
@@ -25,7 +26,8 @@ class _CreateMessState extends State<CreateMess> {
       body: Container(
         decoration: const BoxDecoration(
           image: DecorationImage(
-            image: AssetImage("assets/images/create meal.jpeg"),
+            image: AssetImage("assets/images/create meal.jpg"),
+
             fit: BoxFit.cover,
             colorFilter: ColorFilter.matrix([
               1, 0, 0, 0, 0,
@@ -42,9 +44,9 @@ class _CreateMessState extends State<CreateMess> {
 
             // Meal Name TextField (Shortened)
             Text(
-              "  Meal Name",
+              "  Create a join key",
               style: TextStyle(
-                color: Colors.black,
+                color: Colors.white,
                 fontSize: 25.0,
                 fontWeight: FontWeight.bold,
               ),
@@ -76,9 +78,9 @@ class _CreateMessState extends State<CreateMess> {
 
             // Join Key TextField (Shortened)
             Text(
-              "  Create a join key",
+              "  Meal Name",
               style: TextStyle(
-                color: Colors.black,
+                color: Colors.white,
                 fontSize: 25.0,
                 fontWeight: FontWeight.bold,
               ),
@@ -140,7 +142,7 @@ class _CreateMessState extends State<CreateMess> {
       color: Colors.transparent,
       border: Border.all(
         width: 4,
-        color: Colors.black,
+        color: Colors.white,
       ),
       borderRadius: BorderRadius.circular(30),
     );
