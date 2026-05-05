@@ -169,24 +169,43 @@ class _ManagerHomeState extends State<ManagerHome> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.yellow[100],
-        title: const Text(
-          "Meal Assistant",
-          style: TextStyle(
-              color: Colors.black, fontSize: 30, fontWeight: FontWeight.bold),
+        backgroundColor: isMultiSelectMode ? Colors.green[100] : Colors.yellow[100],
+        leading: isMultiSelectMode
+            ? IconButton(
+                icon: const Icon(Icons.close, color: Colors.black),
+                onPressed: () {
+                  setState(() {
+                    isMultiSelectMode = false;
+                    selectedDays.clear();
+                  });
+                },
+              )
+            : null,
+        title: Text(
+          isMultiSelectMode ? "${selectedDays.length} Selected" : "Meal Assistant",
+          style: const TextStyle(
+              color: Colors.black, fontSize: 24, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.message, color: Colors.black),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => ManagerMessaging()),
+          if (isMultiSelectMode)
+            IconButton(
+              icon: const Icon(Icons.info_outline, color: Colors.black),
+              onPressed: selectedDays.isNotEmpty
+                  ? () => _showMultiDayUsers(context)
+                  : null,
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.message, color: Colors.black),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => ManagerMessaging()),
+              ),
             ),
-          ),
         ],
       ),
-      drawer: Drawer(
+      drawer: isMultiSelectMode ? null : Drawer(
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
@@ -268,44 +287,12 @@ class _ManagerHomeState extends State<ManagerHome> {
               1, 0, 0, 0, 0,
               0, 1, 0, 0, 0,
               0, 0, 1, 0, 0,
-              0, 0, 0, 1, 0,
+              0, 0, 0, 0.5, 0,
             ]),
           ),
         ),
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        setState(() {
-                          isMultiSelectMode = !isMultiSelectMode;
-                          if (!isMultiSelectMode) selectedDays.clear();
-                        });
-                      },
-                      child: Text(isMultiSelectMode
-                          ? "Cancel Selection"
-                          : "Select Multiple"),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: selectedDays.isNotEmpty
-                          ? () => _showMultiDayUsers(context)
-                          : null,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                      ),
-                      child: const Text("Show Details"),
-                    ),
-                  ),
-                ],
-              ),
-            ),
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.all(8.0),
@@ -321,17 +308,33 @@ class _ManagerHomeState extends State<ManagerHome> {
                     int day = index + 1;
                     bool isToday = day == today.day;
                     bool isSelected = selectedDays.contains(day);
+                    bool isSingleSelected = selectedDay == day && !isMultiSelectMode;
+
                     return GestureDetector(
                       onTap: () {
                         setState(() {
                           if (isMultiSelectMode) {
-                            isSelected
-                                ? selectedDays.remove(day)
-                                : selectedDays.add(day);
+                            if (isSelected) {
+                              selectedDays.remove(day);
+                              if (selectedDays.isEmpty) {
+                                isMultiSelectMode = false;
+                              }
+                            } else {
+                              selectedDays.add(day);
+                            }
                           } else {
+                            selectedDay = day;
                             _showSingleDayUsers(context, day);
                           }
                         });
+                      },
+                      onLongPress: () {
+                        if (!isMultiSelectMode) {
+                          setState(() {
+                            isMultiSelectMode = true;
+                            selectedDays.add(day);
+                          });
+                        }
                       },
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(8.0),
@@ -345,9 +348,10 @@ class _ManagerHomeState extends State<ManagerHome> {
                                     ? Colors.blue.withOpacity(0.8)
                                     : Colors.white.withOpacity(0.8),
                                 borderRadius: BorderRadius.circular(8.0),
-                                border: isToday
-                                    ? Border.all(
-                                    color: Colors.blueAccent, width: 2)
+                                border: isSingleSelected
+                                    ? Border.all(color: Colors.greenAccent, width: 2)
+                                    : isToday
+                                    ? Border.all(color: Colors.blueAccent, width: 2)
                                     : null,
                               ),
                               child: Padding(
@@ -361,8 +365,7 @@ class _ManagerHomeState extends State<ManagerHome> {
                                       Text(
                                         "$day",
                                         style: TextStyle(
-                                          color: isMultiSelectMode && isSelected ||
-                                              isToday
+                                          color: (isMultiSelectMode && isSelected) || isToday
                                               ? Colors.white
                                               : Colors.black,
                                           fontSize: 18,
@@ -381,9 +384,7 @@ class _ManagerHomeState extends State<ManagerHome> {
                                             return "${['B', 'L', 'D'][e.key]}:${parts[0]}${parts[1] != '0' ? '(${parts[1]})' : ''}";
                                           }).join('\n'),
                                           style: TextStyle(
-                                            color: isMultiSelectMode &&
-                                                isSelected ||
-                                                isToday
+                                            color: (isMultiSelectMode && isSelected) || isToday
                                                 ? Colors.white
                                                 : Colors.grey[800],
                                             fontSize: 12,
@@ -402,20 +403,12 @@ class _ManagerHomeState extends State<ManagerHome> {
                             ),
                             if (isMultiSelectMode)
                               Positioned(
-                                top: 4,
-                                right: 4,
-                                child: Checkbox(
-                                  value: isSelected,
-                                  materialTapTargetSize:
-                                  MaterialTapTargetSize.shrinkWrap,
-                                  visualDensity: VisualDensity.compact,
-                                  onChanged: (value) {
-                                    setState(() {
-                                      value!
-                                          ? selectedDays.add(day)
-                                          : selectedDays.remove(day);
-                                    });
-                                  },
+                                top: 2,
+                                right: 2,
+                                child: Icon(
+                                  isSelected ? Icons.check_circle : Icons.circle_outlined,
+                                  color: isSelected ? Colors.white : Colors.white70,
+                                  size: 16,
                                 ),
                               ),
                           ],
@@ -430,9 +423,8 @@ class _ManagerHomeState extends State<ManagerHome> {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.9),
-                borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(20)),
-                boxShadow: [
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                boxShadow: const [
                   BoxShadow(
                     color: Colors.black12,
                     blurRadius: 10,
@@ -445,20 +437,16 @@ class _ManagerHomeState extends State<ManagerHome> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      _buildStatCard("Total Deposit",
-                          "₹${totalDeposit.toStringAsFixed(2)}", Colors.green),
-                      _buildStatCard("Available Balance",
-                          "₹${availableBalance.toStringAsFixed(2)}", Colors.blue),
+                      _buildStatCard("Total Deposit", "₹${totalDeposit.toStringAsFixed(2)}", Colors.green),
+                      _buildStatCard("Available Balance", "₹${availableBalance.toStringAsFixed(2)}", Colors.blue),
                     ],
                   ),
                   const SizedBox(height: 10),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      _buildStatCard("Meal Rate",
-                          "₹${mealRate.toStringAsFixed(2)}", Colors.orange),
-                      _buildStatCard(
-                          "Total Meals", totalMeals.toString(), Colors.purple),
+                      _buildStatCard("Meal Rate", "₹${mealRate.toStringAsFixed(2)}", Colors.orange),
+                      _buildStatCard("Total Meals", totalMeals.toString(), Colors.purple),
                     ],
                   ),
                 ],

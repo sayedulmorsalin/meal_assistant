@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:mess_management/land%20page/landpage.dart';
 import 'package:mess_management/splashscreen/splashscreen.dart';
-//import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized(); // Ensure Flutter bindings are initialized
- // await Firebase.initializeApp(); // Initialize Firebase
+  await Firebase.initializeApp(); // Initialize Firebase
   runApp(const MyApp());
 }
 

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mess_management/manager/manager_home.dart';
 import 'package:mess_management/user/history.dart';
-import 'package:mess_management/user/masseging.dart';
 import 'package:mess_management/user/meal_planning.dart';
 import 'package:mess_management/user/profile.dart';
 import 'package:mess_management/user/shopping.dart';
@@ -280,29 +279,45 @@ class _UserHomeState extends State {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.yellow[100],
-        title: const Text(
-          "Meal Assistant",
-          style: TextStyle(
-              color: Colors.black, fontSize: 30, fontWeight: FontWeight.bold),
+        backgroundColor: isMultiSelectMode ? Colors.green[100] : Colors.yellow[100],
+        leading: isMultiSelectMode
+            ? IconButton(
+          icon: const Icon(Icons.close, color: Colors.black),
+          onPressed: () {
+            setState(() {
+              isMultiSelectMode = false;
+              selectedDays.clear();
+            });
+          },
+        )
+            : null,
+        title: Text(
+          isMultiSelectMode ? "${selectedDays.length} Selected" : "Meal Assistant",
+          style: const TextStyle(
+              color: Colors.black, fontSize: 24, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.message, color: Colors.black),
-            onPressed: () {
-
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => ManagerHome()),
-
-              );
-              // Add notification action
-            },
-          ),
+          if (isMultiSelectMode)
+            IconButton(
+              icon: const Icon(Icons.edit, color: Colors.black),
+              onPressed: selectedDays.isNotEmpty
+                  ? () => _showDateDetails(context)
+                  : null,
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.message, color: Colors.black),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => ManagerHome()),
+                );
+              },
+            ),
         ],
       ),
-      drawer: Drawer(
+      drawer: isMultiSelectMode ? null : Drawer(
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
@@ -323,12 +338,9 @@ class _UserHomeState extends State {
               title: const Text('Profile'),
               onTap: () {
                 Navigator.pop(context);
-                // Add profile navigation
-
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => Profile()),
-
                 );
               },
             ),
@@ -337,13 +349,10 @@ class _UserHomeState extends State {
               title: const Text('Transaction'),
               onTap: () {
                 Navigator.pop(context);
-
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => Transaction()),
-
                 );
-                // Add settings navigation
               },
             ),
             ListTile(
@@ -351,13 +360,10 @@ class _UserHomeState extends State {
               title: const Text('Meal planning'),
               onTap: () {
                 Navigator.pop(context);
-
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => MealPlanning()),
-
                 );
-                // Add history navigation
               },
             ),
             ListTile(
@@ -365,12 +371,9 @@ class _UserHomeState extends State {
               title: const Text('Shopping'),
               onTap: () {
                 Navigator.pop(context);
-                // Add history navigation
-
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => Shopping()),
-
                 );
               },
             ),
@@ -379,12 +382,9 @@ class _UserHomeState extends State {
               title: const Text('Meal History'),
               onTap: () {
                 Navigator.pop(context);
-                // Add history navigation
-
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => History()),
-
                 );
               },
             ),
@@ -394,7 +394,6 @@ class _UserHomeState extends State {
               title: const Text('Logout'),
               onTap: () {
                 Navigator.pop(context);
-                // Add logout functionality
               },
             ),
           ],
@@ -415,38 +414,6 @@ class _UserHomeState extends State {
         ),
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        setState(() {
-                          isMultiSelectMode = !isMultiSelectMode;
-                          if (!isMultiSelectMode) selectedDays.clear();
-                        });
-                      },
-                      child: Text(isMultiSelectMode
-                          ? "Cancel Selection"
-                          : "Select Multiple"),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: selectedDays.isNotEmpty
-                          ? () => _showDateDetails(context)
-                          : null,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                      ),
-                      child: const Text("Edit Selected"),
-                    ),
-                  ),
-                ],
-              ),
-            ),
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.all(8.0),
@@ -470,105 +437,101 @@ class _UserHomeState extends State {
                       onTap: () {
                         setState(() {
                           if (isMultiSelectMode) {
-                            isSelected
-                                ? selectedDays.remove(day)
-                                : selectedDays.add(day);
+                            if (isSelected) {
+                              selectedDays.remove(day);
+                              if (selectedDays.isEmpty) {
+                                isMultiSelectMode = false;
+                              }
+                            } else {
+                              selectedDays.add(day);
+                            }
                           } else {
                             selectedDay = day;
                             _showDateDetails(context, day);
                           }
                         });
                       },
+                      onLongPress: () {
+                        if (!isMultiSelectMode) {
+                          setState(() {
+                            isMultiSelectMode = true;
+                            selectedDays.add(day);
+                          });
+                        }
+                      },
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(8.0),
-                        child: Stack(
-                          children: [
-                            Container(
-                              decoration: BoxDecoration(
-                                color: isMultiSelectMode && isSelected
-                                    ? Colors.green.withOpacity(0.8)
-                                    : isToday
-                                    ? Colors.blue.withOpacity(0.8)
-                                    : Colors.white.withOpacity(0.8),
-                                borderRadius: BorderRadius.circular(8.0),
-                                border: isSingleSelected
-                                    ? Border.all(
-                                    color: Colors.greenAccent, width: 2)
-                                    : isToday
-                                    ? Border.all(
-                                    color: Colors.blueAccent, width: 2)
-                                    : null,
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.only(left: 8.0),
-                                child: Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    crossAxisAlignment:
-                                    CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        "$day",
-                                        style: TextStyle(
-                                          color: isMultiSelectMode && isSelected ||
-                                              isToday
-                                              ? Colors.white
-                                              : Colors.black,
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
-                                        ),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: isMultiSelectMode && isSelected
+                                ? Colors.green.withOpacity(0.8)
+                                : isToday
+                                ? Colors.blue.withOpacity(0.8)
+                                : Colors.white.withOpacity(0.8),
+                            borderRadius: BorderRadius.circular(8.0),
+                            border: isSingleSelected
+                                ? Border.all(
+                                color: Colors.greenAccent, width: 2)
+                                : isToday
+                                ? Border.all(
+                                color: Colors.blueAccent, width: 2)
+                                : null,
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(4.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      "$day",
+                                      style: TextStyle(
+                                        color: (isMultiSelectMode && isSelected) ||
+                                            isToday
+                                            ? Colors.white
+                                            : Colors.black,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
                                       ),
-                                      Padding(
-                                        padding: const EdgeInsets.only(top: 2.0),
-                                        child: Text(
-                                          calendarData[day]!
-                                              .split('|')
-                                              .asMap()
-                                              .entries
-                                              .map((e) {
-                                            List parts = e.value.split(',');
-                                            return "${['B', 'L', 'D'][e.key]}:${parts[0]}${parts[1] != '0' ? '(${parts[1]})' : ''}";
-                                          }).join('\n'),
-                                          style: TextStyle(
-                                            color: isMultiSelectMode &&
-                                                isSelected ||
-                                                isToday
-                                                ? Colors.white
-                                                : Colors.grey[800],
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold,
-                                            height: 1.0,
-                                          ),
-                                          textAlign: TextAlign.left,
-                                          overflow: TextOverflow.ellipsis,
-                                          maxLines: 3,
-                                        ),
+                                    ),
+                                    if (isMultiSelectMode)
+                                      Icon(
+                                        isSelected ? Icons.check_circle : Icons.circle_outlined,
+                                        color: isSelected ? Colors.white : Colors.white70,
+                                        size: 14,
                                       ),
-                                    ],
+                                  ],
+                                ),
+                                const Spacer(),
+                                Text(
+                                  calendarData[day]!
+                                      .split('|')
+                                      .asMap()
+                                      .entries
+                                      .map((e) {
+                                    List parts = e.value.split(',');
+                                    return "${['B', 'L', 'D'][e.key]}:${parts[0]}${parts[1] != '0' ? '(${parts[1]})' : ''}";
+                                  }).join('\n'),
+                                  style: TextStyle(
+                                    color: (isMultiSelectMode &&
+                                        isSelected) ||
+                                        isToday
+                                        ? Colors.white
+                                        : Colors.grey[800],
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    height: 1.1,
                                   ),
+                                  textAlign: TextAlign.left,
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 3,
                                 ),
-                              ),
+                                const Spacer(),
+                              ],
                             ),
-                            if (isMultiSelectMode)
-                              Positioned(
-                                top: 4,
-                                right: 4,
-                                child: Checkbox(
-                                  value: isSelected,
-                                  materialTapTargetSize:
-                                  MaterialTapTargetSize.shrinkWrap,
-                                  visualDensity: VisualDensity.compact,
-                                  onChanged: (value) {
-                                    setState(() {
-                                      value!
-                                          ? selectedDays.add(day)
-                                          : selectedDays.remove(day);
-                                    });
-                                  },
-                                ),
-                              ),
-                          ],
+                          ),
                         ),
                       ),
                     );
@@ -582,7 +545,7 @@ class _UserHomeState extends State {
                 color: Colors.white.withOpacity(0.9),
                 borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(20)),
-                boxShadow: [
+                boxShadow: const [
                   BoxShadow(
                     color: Colors.black12,
                     blurRadius: 10,
