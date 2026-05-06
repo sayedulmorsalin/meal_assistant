@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:mess_management/land%20page/landpage.dart';
-import 'package:mess_management/splashscreen/splashscreen.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 
