@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:mess_management/manager/add_meal_planning.dart';
-import 'package:mess_management/manager/add_shopping.dart';
-import 'package:mess_management/manager/manager_messaging.dart';
-import 'package:mess_management/manager/meal_member.dart';
-import 'package:mess_management/user/history.dart';
-import 'package:mess_management/user/profile.dart';
-import 'package:mess_management/user/transaction.dart';
+import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
+import '../../models/meal_model.dart';
+import '../../models/request_model.dart';
+import '../../models/user_model.dart';
+import '../../services/auth_service.dart';
+import '../../services/database_service.dart';
+import 'add_meal_planning.dart';
+import 'add_shopping.dart';
+import 'manager_messaging.dart';
+import 'meal_member.dart';
+import '../member/history.dart';
+import '../member/profile.dart';
+import '../member/transaction.dart';
 
 class ManagerHome extends StatefulWidget {
   const ManagerHome({super.key});
@@ -15,51 +21,86 @@ class ManagerHome extends StatefulWidget {
 }
 
 class _ManagerHomeState extends State<ManagerHome> {
-  final Map calendarData = {};
+  final DatabaseService _dbService = DatabaseService();
+  final AuthService _authService = AuthService();
+
+  UserModel? _manager;
   final DateTime today = DateTime.now();
-  List selectedDays = [];
+  List<int> selectedDays = [];
   bool isMultiSelectMode = false;
   int? selectedDay;
   double totalDeposit = 5000.0;
   double mealRate = 50.0;
 
-  // Mock user data
-  final List<Map<String, dynamic>> users = [
-    {
-      'name': 'John Doe',
-      'meals': {
-        1: '1,0|1,0|1,0',
-        2: '0,1|1,0|0,1',
-        3: '1,0|1,1|1,0',
-      },
-      'details': 'Room 101, Vegetarian'
-    },
-    {
-      'name': 'Jane Smith',
-      'meals': {
-        1: '0,1|1,0|0,0',
-        2: '1,0|1,1|1,0',
-        3: '0,0|1,0|1,1',
-      },
-      'details': 'Room 102, Non-vegetarian'
-    },
-  ];
+  List<UserModel> _members = [];
+  List<RequestModel> _pendingRequests = [];
+  final Map<int, List<MealModel>> _monthlyMeals = {};
 
   @override
   void initState() {
     super.initState();
-    for (int day = 1; day <= 31; day++) {
-      calendarData[day] = "0,0|0,0|0,0";
+    _loadManagerData();
+  }
+
+  void _loadManagerData() async {
+    String? uid = _authService.currentUid;
+    if (uid != null) {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      if (doc.exists && mounted) {
+        setState(() {
+          _manager = UserModel.fromMap(doc.data()!);
+        });
+        _listenToData();
+      }
     }
+  }
+
+  void _listenToData() {
+    if (_manager == null || _manager!.messId == null) return;
+    String messId = _manager!.messId!;
+
+    _dbService.getMessMembers(messId).listen((members) {
+      if (mounted) setState(() => _members = members);
+    });
+
+    FirebaseFirestore.instance.collection('messes').doc(messId).snapshots().listen((doc) {
+      if (doc.exists && mounted) {
+        setState(() {
+          totalDeposit = (doc.data()?['totalDeposit'] ?? 5000.0).toDouble();
+          mealRate = (doc.data()?['mealRate'] ?? 50.0).toDouble();
+        });
+      }
+    });
+
+    _dbService.getPendingRequests(messId).listen((requests) {
+      if (mounted) setState(() => _pendingRequests = requests);
+    });
+
+    FirebaseFirestore.instance.collection('meals')
+        .where('messId', isEqualTo: messId)
+        .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(DateTime(today.year, today.month, 1)))
+        .where('date', isLessThan: Timestamp.fromDate(DateTime(today.year, today.month + 1, 1)))
+        .snapshots()
+        .listen((snapshot) {
+      if (mounted) {
+        setState(() {
+          _monthlyMeals.clear();
+          for (var doc in snapshot.docs) {
+            MealModel meal = MealModel.fromMap(doc.data());
+            _monthlyMeals.putIfAbsent(meal.date.day, () => []).add(meal);
+          }
+        });
+      }
+    });
   }
 
   int get totalMeals {
     int sum = 0;
-    calendarData.forEach((key, value) {
-      List meals = value.split('|');
+    _monthlyMeals.forEach((day, meals) {
       for (var meal in meals) {
-        List parts = meal.split(',');
-        sum += int.parse(parts[0]) + int.parse(parts[1]);
+        if (meal.breakfast) sum += 1 + meal.guestBreakfast;
+        if (meal.lunch) sum += 1 + meal.guestLunch;
+        if (meal.dinner) sum += 1 + meal.guestDinner;
       }
     });
     return sum;
@@ -71,6 +112,7 @@ class _ManagerHomeState extends State<ManagerHome> {
     showModalBottomSheet(
       context: context,
       builder: (context) {
+        final dayMeals = _monthlyMeals[day] ?? [];
         return Container(
           padding: const EdgeInsets.all(16),
           height: MediaQuery.of(context).size.height * 0.7,
@@ -80,18 +122,21 @@ class _ManagerHomeState extends State<ManagerHome> {
                   style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
               Expanded(
                 child: ListView.builder(
-                  itemCount: users.length,
+                  itemCount: _members.length,
                   itemBuilder: (context, index) {
-                    final user = users[index];
-                    final meals = user['meals'][day]?.split('|') ?? ['0,0', '0,0', '0,0'];
+                    final member = _members[index];
+                    final meal = dayMeals.firstWhere(
+                      (m) => m.userId == member.uid, 
+                      orElse: () => MealModel(id: "", userId: member.uid, messId: "", date: DateTime.now())
+                    );
                     return ListTile(
-                      title: Text(user['name']),
+                      title: Text(member.name),
                       subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Breakfast: ${meals[0].split(',')[0]} (${meals[0].split(',')[1]} guest)'),
-                          Text('Lunch: ${meals[1].split(',')[0]} (${meals[1].split(',')[1]} guest)'),
-                          Text('Dinner: ${meals[2].split(',')[0]} (${meals[2].split(',')[1]} guest)'),
+                          Text('Breakfast: ${meal.breakfast ? 1 : 0} (${meal.guestBreakfast} guest)'),
+                          Text('Lunch: ${meal.lunch ? 1 : 0} (${meal.guestLunch} guest)'),
+                          Text('Dinner: ${meal.dinner ? 1 : 0} (${meal.guestDinner} guest)'),
                         ],
                       ),
                     );
@@ -118,9 +163,9 @@ class _ManagerHomeState extends State<ManagerHome> {
                   style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
               Expanded(
                 child: ListView.builder(
-                  itemCount: users.length,
+                  itemCount: _members.length,
                   itemBuilder: (context, index) {
-                    final user = users[index];
+                    final member = _members[index];
                     int totalBreakfast = 0;
                     int totalLunch = 0;
                     int totalDinner = 0;
@@ -129,23 +174,23 @@ class _ManagerHomeState extends State<ManagerHome> {
                     int totalGuestDinner = 0;
 
                     for (var day in selectedDays) {
-                      final meals = user['meals'][day]?.split('|') ?? ['0,0', '0,0', '0,0'];
-                      // Breakfast
-                      List breakfast = meals[0].split(',');
-                      totalBreakfast += int.parse(breakfast[0]);
-                      totalGuestBreakfast += int.parse(breakfast[1]);
-                      // Lunch
-                      List lunch = meals[1].split(',');
-                      totalLunch += int.parse(lunch[0]);
-                      totalGuestLunch += int.parse(lunch[1]);
-                      // Dinner
-                      List dinner = meals[2].split(',');
-                      totalDinner += int.parse(dinner[0]);
-                      totalGuestDinner += int.parse(dinner[1]);
+                      final dayMeals = _monthlyMeals[day] ?? [];
+                      final meal = dayMeals.firstWhere(
+                        (m) => m.userId == member.uid, 
+                        orElse: () => MealModel(id: "", userId: member.uid, messId: "", date: DateTime.now())
+                      );
+                      if (meal.id.isNotEmpty) {
+                        totalBreakfast += meal.breakfast ? 1 : 0;
+                        totalLunch += meal.lunch ? 1 : 0;
+                        totalDinner += meal.dinner ? 1 : 0;
+                        totalGuestBreakfast += meal.guestBreakfast;
+                        totalGuestLunch += meal.guestLunch;
+                        totalGuestDinner += meal.guestDinner;
+                      }
                     }
 
                     return ListTile(
-                      title: Text(user['name']),
+                      title: Text(member.name),
                       subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -165,8 +210,70 @@ class _ManagerHomeState extends State<ManagerHome> {
     );
   }
 
+  void _showRequestsDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text("Pending Requests"),
+              content: SizedBox(
+                width: double.maxFinite,
+                height: 400,
+                child: _pendingRequests.isEmpty 
+                  ? const Center(child: Text("No pending requests"))
+                  : ListView.builder(
+                    itemCount: _pendingRequests.length,
+                    itemBuilder: (context, index) {
+                      final req = _pendingRequests[index];
+                      final user = _members.firstWhere(
+                        (m) => m.uid == req.userId, 
+                        orElse: () => UserModel(uid: "", name: "Unknown", email: "", role: UserRole.member, status: "")
+                      );
+                      return ListTile(
+                        title: Text("${user.name} - ${req.date.day}/${req.date.month}"),
+                        subtitle: Text(req.mealsRequested.entries.where((e) => e.value).map((e) => e.key).join(", ")),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.check, color: Colors.green), 
+                              onPressed: () async {
+                                if (_manager != null) {
+                                  await _dbService.approveRequest(req.id, _manager!.uid);
+                                }
+                              }
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close, color: Colors.red), 
+                              onPressed: () async {
+                                if (_manager != null) {
+                                  await _dbService.rejectRequest(req.id, _manager!.uid);
+                                }
+                              }
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text("Close")),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_manager == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
     return Scaffold(
       appBar: AppBar(
         backgroundColor: isMultiSelectMode ? Colors.green[100] : Colors.yellow[100],
@@ -195,14 +302,38 @@ class _ManagerHomeState extends State<ManagerHome> {
                   ? () => _showMultiDayUsers(context)
                   : null,
             )
-          else
+          else ...[
+            Stack(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.notifications, color: Colors.black),
+                  onPressed: () => _showRequestsDialog(context),
+                ),
+                if (_pendingRequests.isNotEmpty)
+                  Positioned(
+                    right: 8,
+                    top: 8,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                      constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+                      child: Text(
+                        '${_pendingRequests.length}',
+                        style: const TextStyle(color: Colors.white, fontSize: 8),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
             IconButton(
               icon: const Icon(Icons.message, color: Colors.black),
               onPressed: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => ManagerMessaging()),
+                MaterialPageRoute(builder: (context) => const ManagerMessaging()),
               ),
             ),
+          ],
         ],
       ),
       drawer: isMultiSelectMode ? null : Drawer(
@@ -226,7 +357,7 @@ class _ManagerHomeState extends State<ManagerHome> {
               title: const Text('Profile'),
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => Profile()),
+                MaterialPageRoute(builder: (context) => const Profile()),
               ),
             ),
             ListTile(
@@ -234,7 +365,7 @@ class _ManagerHomeState extends State<ManagerHome> {
               title: const Text('Meal member'),
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => MealMember()),
+                MaterialPageRoute(builder: (context) => const MealMember()),
               ),
             ),
             ListTile(
@@ -242,7 +373,7 @@ class _ManagerHomeState extends State<ManagerHome> {
               title: const Text('Transaction'),
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => Transaction()),
+                MaterialPageRoute(builder: (context) => const Transaction()),
               ),
             ),
             ListTile(
@@ -250,7 +381,7 @@ class _ManagerHomeState extends State<ManagerHome> {
               title: const Text('Meal planning'),
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => AddMealPlanning()),
+                MaterialPageRoute(builder: (context) => const AddMealPlanning()),
               ),
             ),
             ListTile(
@@ -258,7 +389,7 @@ class _ManagerHomeState extends State<ManagerHome> {
               title: const Text('Shopping'),
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => AddShopping()),
+                MaterialPageRoute(builder: (context) => const AddShopping()),
               ),
             ),
             ListTile(
@@ -266,14 +397,19 @@ class _ManagerHomeState extends State<ManagerHome> {
               title: const Text('Meal History'),
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => History()),
+                MaterialPageRoute(builder: (context) => const History()),
               ),
             ),
             const Divider(),
             ListTile(
               leading: const Icon(Icons.logout),
               title: const Text('Logout'),
-              onTap: () => Navigator.pop(context),
+              onTap: () async {
+                await _authService.signOut();
+                if (context.mounted) {
+                  Navigator.pop(context);
+                }
+              },
             ),
           ],
         ),
@@ -343,10 +479,10 @@ class _ManagerHomeState extends State<ManagerHome> {
                             Container(
                               decoration: BoxDecoration(
                                 color: isMultiSelectMode && isSelected
-                                    ? Colors.green.withOpacity(0.8)
+                                    ? Colors.green.withValues(alpha: 0.8)
                                     : isToday
-                                    ? Colors.blue.withOpacity(0.8)
-                                    : Colors.white.withOpacity(0.8),
+                                    ? Colors.blue.withValues(alpha: 0.8)
+                                    : Colors.white.withValues(alpha: 0.8),
                                 borderRadius: BorderRadius.circular(8.0),
                                 border: isSingleSelected
                                     ? Border.all(color: Colors.greenAccent, width: 2)
@@ -372,30 +508,35 @@ class _ManagerHomeState extends State<ManagerHome> {
                                           fontWeight: FontWeight.bold,
                                         ),
                                       ),
-                                      Padding(
-                                        padding: const EdgeInsets.only(top: 2.0),
-                                        child: Text(
-                                          calendarData[day]!
-                                              .split('|')
-                                              .asMap()
-                                              .entries
-                                              .map((e) {
-                                            List parts = e.value.split(',');
-                                            return "${['B', 'L', 'D'][e.key]}:${parts[0]}${parts[1] != '0' ? '(${parts[1]})' : ''}";
-                                          }).join('\n'),
-                                          style: TextStyle(
-                                            color: (isMultiSelectMode && isSelected) || isToday
-                                                ? Colors.white
-                                                : Colors.grey[800],
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold,
-                                            height: 1.0,
-                                          ),
-                                          textAlign: TextAlign.left,
-                                          overflow: TextOverflow.ellipsis,
-                                          maxLines: 3,
-                                        ),
-                                      ),
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2.0),
+                                  child: Text(
+                                    () {
+                                      final dayMeals = _monthlyMeals[day] ?? [];
+                                      int b = 0, l = 0, d = 0;
+                                      int gb = 0, gl = 0, gd = 0;
+                                      for (var meal in dayMeals) {
+                                        if (meal.breakfast) { b++; gb += meal.guestBreakfast; }
+                                        if (meal.lunch) { l++; gl += meal.guestLunch; }
+                                        if (meal.dinner) { d++; gd += meal.guestDinner; }
+                                      }
+                                      return "B:$b${gb > 0 ? '($gb)' : ''}\n"
+                                             "L:$l${gl > 0 ? '($gl)' : ''}\n"
+                                             "D:$d${gd > 0 ? '($gd)' : ''}";
+                                    }(),
+                                    style: TextStyle(
+                                      color: (isMultiSelectMode && isSelected) || isToday
+                                          ? Colors.white
+                                          : Colors.grey[800],
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      height: 1.0,
+                                    ),
+                                    textAlign: TextAlign.left,
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 3,
+                                  ),
+                                ),
                                     ],
                                   ),
                                 ),
@@ -422,7 +563,7 @@ class _ManagerHomeState extends State<ManagerHome> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.9),
+                color: Colors.white.withValues(alpha: 0.9),
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
                 boxShadow: const [
                   BoxShadow(
@@ -461,7 +602,7 @@ class _ManagerHomeState extends State<ManagerHome> {
   Widget _buildStatCard(String title, String value, Color color) {
     return Expanded(
       child: Card(
-        color: color.withOpacity(0.2),
+        color: color.withValues(alpha: 0.2),
         elevation: 4,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),

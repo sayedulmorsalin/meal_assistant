@@ -1,22 +1,34 @@
 import 'package:flutter/material.dart';
-import 'package:mess_management/manager/manager_home.dart';
-import 'package:mess_management/user/history.dart';
-import 'package:mess_management/user/meal_planning.dart';
-import 'package:mess_management/user/profile.dart';
-import 'package:mess_management/user/shopping.dart';
-import 'package:mess_management/user/transaction.dart';
+import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
+import '../../models/meal_model.dart';
+import '../../models/request_model.dart';
+import '../../models/user_model.dart';
+import '../../services/auth_service.dart';
+import '../../services/database_service.dart';
+import '../manager/manager_home.dart';
+import 'history.dart';
+import 'meal_planning.dart';
+import 'profile.dart';
+import 'shopping.dart';
+import 'transaction.dart';
 
 class UserHome extends StatefulWidget {
   const UserHome({super.key});
 
   @override
-  State createState() => _UserHomeState();
+  State<UserHome> createState() => _UserHomeState();
 }
 
-class _UserHomeState extends State {
-  final Map calendarData = {};
+class _UserHomeState extends State<UserHome> {
+  final DatabaseService _dbService = DatabaseService();
+  final AuthService _authService = AuthService();
+  
+  final Map<int, MealModel?> _monthlyMeals = {};
+  final Map<int, RequestModel?> _pendingRequests = {};
+  UserModel? _user;
+
   final DateTime today = DateTime.now();
-  List selectedDays = [];
+  List<int> selectedDays = [];
   bool isMultiSelectMode = false;
   int? selectedDay;
 
@@ -26,18 +38,68 @@ class _UserHomeState extends State {
   @override
   void initState() {
     super.initState();
-    for (int day = 1; day <= 31; day++) {
-      calendarData[day] = "0,0|0,0|0,0";
+    _loadUserData();
+  }
+
+  void _loadUserData() async {
+    String? uid = _authService.currentUid;
+    if (uid != null) {
+      FirebaseFirestore.instance.collection('users').doc(uid).snapshots().listen((doc) {
+        if (doc.exists && mounted) {
+          setState(() {
+            _user = UserModel.fromMap(doc.data()!);
+          });
+          _listenToMeals();
+        }
+      });
     }
+  }
+
+  void _listenToMeals() {
+    if (_user == null || _user!.messId == null) return;
+    String messId = _user!.messId!;
+    
+    FirebaseFirestore.instance.collection('messes').doc(messId).snapshots().listen((doc) {
+      if (doc.exists && mounted) {
+        setState(() {
+          totalDeposit = (doc.data()?['totalDeposit'] ?? 5000.0).toDouble();
+          mealRate = (doc.data()?['mealRate'] ?? 50.0).toDouble();
+        });
+      }
+    });
+
+    _dbService.getUserMonthlyMeals(_user!.uid, today.year, today.month).listen((meals) {
+      if (mounted) {
+        setState(() {
+          _monthlyMeals.clear();
+          for (var meal in meals) {
+            _monthlyMeals[meal.date.day] = meal;
+          }
+        });
+      }
+    });
+
+    _dbService.getUserPendingRequests(_user!.uid).listen((requests) {
+      if (mounted) {
+        setState(() {
+          _pendingRequests.clear();
+          for (var req in requests) {
+            if (req.date.year == today.year && req.date.month == today.month) {
+              _pendingRequests[req.date.day] = req;
+            }
+          }
+        });
+      }
+    });
   }
 
   int get totalMeals {
     int sum = 0;
-    calendarData.forEach((key, value) {
-      List meals = value.split('|');
-      for (var meal in meals) {
-        List parts = meal.split(',');
-        sum += int.parse(parts[0]) + int.parse(parts[1]);
+    _monthlyMeals.forEach((key, meal) {
+      if (meal != null) {
+        if (meal.breakfast) sum += 1 + meal.guestBreakfast;
+        if (meal.lunch) sum += 1 + meal.guestLunch;
+        if (meal.dinner) sum += 1 + meal.guestDinner;
       }
     });
     return sum;
@@ -48,17 +110,16 @@ class _UserHomeState extends State {
   void _showDateDetails(BuildContext context, [int? day]) {
     if (day == null && selectedDays.isEmpty) return;
 
-    List initialValues = day != null
-        ? calendarData[day]!.split('|')
-        : calendarData[selectedDays.first]!.split('|');
-    List meals = initialValues.map((m) => m.split(',')).toList();
-    List mealValues = meals.map((m) => m[0] == '1').toList();
+    MealModel? initialMeal = day != null ? _monthlyMeals[day] : _monthlyMeals[selectedDays.first];
+    bool breakfast = initialMeal?.breakfast ?? false;
+    bool lunch = initialMeal?.lunch ?? false;
+    bool dinner = initialMeal?.dinner ?? false;
 
     showDialog(
       context: context,
       builder: (context) {
         return StatefulBuilder(
-          builder: (context, setState) {
+          builder: (context, setDialogState) {
             return AlertDialog(
               title: day != null
                   ? Text("Edit Day $day")
@@ -66,14 +127,14 @@ class _UserHomeState extends State {
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _buildMealSwitch("Breakfast", mealValues[0], (value) {
-                    setState(() => mealValues[0] = value);
+                  _buildMealSwitch("Breakfast", breakfast, (value) {
+                    setDialogState(() => breakfast = value);
                   }),
-                  _buildMealSwitch("Lunch", mealValues[1], (value) {
-                    setState(() => mealValues[1] = value);
+                  _buildMealSwitch("Lunch", lunch, (value) {
+                    setDialogState(() => lunch = value);
                   }),
-                  _buildMealSwitch("Dinner", mealValues[2], (value) {
-                    setState(() => mealValues[2] = value);
+                  _buildMealSwitch("Dinner", dinner, (value) {
+                    setDialogState(() => dinner = value);
                   }),
                   Padding(
                     padding: const EdgeInsets.only(top: 16.0),
@@ -99,21 +160,41 @@ class _UserHomeState extends State {
                         ),
                         const SizedBox(width: 8),
                         ElevatedButton(
-                          onPressed: () {
-                            final values = mealValues.asMap().entries.map((entry) {
-                              int index = entry.key;
-                              bool value = entry.value;
-                              return "${value ? '1' : '0'},${meals[index][1]}";
-                            }).join("|");
+                          onPressed: () async {
+                            Map<String, bool> requested = {
+                              'breakfast': breakfast,
+                              'lunch': lunch,
+                              'dinner': dinner,
+                            };
 
-                            if (day != null) {
-                              calendarData[day] = values;
-                            } else {
-                              for (var d in selectedDays) {
-                                calendarData[d] = values;
+                            if (_user != null && (_user!.role == UserRole.manager || _user!.role == UserRole.superAdmin)) {
+                              for (int d in (day != null ? [day] : selectedDays)) {
+                                DateTime date = DateTime(today.year, today.month, d);
+                                MealModel? existing = _monthlyMeals[d];
+                                MealModel newMeal = MealModel(
+                                  id: existing?.id ?? FirebaseFirestore.instance.collection('meals').doc().id,
+                                  userId: _user!.uid,
+                                  messId: _user!.messId!,
+                                  date: date,
+                                  breakfast: breakfast,
+                                  lunch: lunch,
+                                  dinner: dinner,
+                                  guestBreakfast: existing?.guestBreakfast ?? 0,
+                                  guestLunch: existing?.guestLunch ?? 0,
+                                  guestDinner: existing?.guestDinner ?? 0,
+                                );
+                                await _dbService.updateMealStatus(newMeal);
+                              }
+                            } else if (_user != null) {
+                              for (int d in (day != null ? [day] : selectedDays)) {
+                                DateTime date = DateTime(today.year, today.month, d);
+                                await _dbService.createMealRequest(_user!.uid, _user!.messId!, date, requested);
+                              }
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Request sent to manager")));
                               }
                             }
-                            Navigator.of(context).pop();
+                            if (context.mounted) Navigator.of(context).pop();
                           },
                           child: const Text("Save"),
                         ),
@@ -127,12 +208,14 @@ class _UserHomeState extends State {
         );
       },
     ).then((_) {
-      setState(() {
-        if (day == null) {
-          selectedDays.clear();
-          isMultiSelectMode = false;
-        }
-      });
+      if (mounted) {
+        setState(() {
+          if (day == null) {
+            selectedDays.clear();
+            isMultiSelectMode = false;
+          }
+        });
+      }
     });
   }
 
@@ -140,39 +223,16 @@ class _UserHomeState extends State {
     bool isMultiSelect = selectedDays.isNotEmpty;
     if (isMultiSelect && selectedDays.isEmpty) return;
 
-    List initialBreakfast = [];
-    List initialLunch = [];
-    List initialDinner = [];
-
-    if (isMultiSelect) {
-      for (var d in selectedDays) {
-        var meals = calendarData[d]!.split('|');
-        for (int i = 0; i < 3; i++) {
-          var parts = meals[i].split(',');
-          initialBreakfast.add(int.parse(parts[1]));
-          initialLunch.add(int.parse(parts[1]));
-          initialDinner.add(int.parse(parts[1]));
-        }
-      }
-    } else {
-      var meals = calendarData[day!]!.split('|');
-      for (int i = 0; i < 3; i++) {
-        var parts = meals[i].split(',');
-        initialBreakfast.add(int.parse(parts[1]));
-        initialLunch.add(int.parse(parts[1]));
-        initialDinner.add(int.parse(parts[1]));
-      }
-    }
-
-    int breakfastValue = isMultiSelect ? initialBreakfast.first : initialBreakfast[0];
-    int lunchValue = isMultiSelect ? initialLunch.first : initialLunch[0];
-    int dinnerValue = isMultiSelect ? initialDinner.first : initialDinner[0];
+    MealModel? initialMeal = day != null ? _monthlyMeals[day] : (selectedDays.isNotEmpty ? _monthlyMeals[selectedDays.first] : null);
+    int breakfastValue = initialMeal?.guestBreakfast ?? 0;
+    int lunchValue = initialMeal?.guestLunch ?? 0;
+    int dinnerValue = initialMeal?.guestDinner ?? 0;
 
     showDialog(
       context: context,
       builder: (context) {
         return StatefulBuilder(
-          builder: (context, setState) {
+          builder: (context, setDialogState) {
             return AlertDialog(
               title: isMultiSelect
                   ? Text("Add Guest Meals to ${selectedDays.length} Days")
@@ -181,47 +241,42 @@ class _UserHomeState extends State {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _buildGuestMealDropdown("Breakfast", breakfastValue,
-                          (v) => setState(() => breakfastValue = v)),
+                          (v) => setDialogState(() => breakfastValue = v)),
                   _buildGuestMealDropdown("Lunch", lunchValue,
-                          (v) => setState(() => lunchValue = v)),
+                          (v) => setDialogState(() => lunchValue = v)),
                   _buildGuestMealDropdown("Dinner", dinnerValue,
-                          (v) => setState(() => dinnerValue = v)),
+                          (v) => setDialogState(() => dinnerValue = v)),
                   const SizedBox(height: 20),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       TextButton(
-                        onPressed: Navigator.of(context).pop,
+                        onPressed: () => Navigator.of(context).pop(),
                         child: const Text("Cancel"),
                       ),
                       const SizedBox(width: 10),
                       ElevatedButton(
-                        onPressed: () {
-                          String getUpdatedMeal(String original, int guest) {
-                            List parts = original.split(',');
-                            return "${parts[0]},$guest";
-                          }
-
-                          if (isMultiSelect) {
-                            for (var d in selectedDays) {
-                              var originalMeals = calendarData[d]!.split('|');
-                              List newMeals = [];
-                              for (int i = 0; i < 3; i++) {
-                                int guest = [breakfastValue, lunchValue, dinnerValue][i];
-                                newMeals.add(getUpdatedMeal(originalMeals[i], guest));
-                              }
-                              calendarData[d] = newMeals.join('|');
+                        onPressed: () async {
+                           if (_user != null) {
+                            for (int d in (day != null ? [day] : selectedDays)) {
+                              DateTime date = DateTime(today.year, today.month, d);
+                              MealModel? existing = _monthlyMeals[d];
+                              MealModel newMeal = MealModel(
+                                id: existing?.id ?? FirebaseFirestore.instance.collection('meals').doc().id,
+                                userId: _user!.uid,
+                                messId: _user!.messId!,
+                                date: date,
+                                breakfast: existing?.breakfast ?? false,
+                                lunch: existing?.lunch ?? false,
+                                dinner: existing?.dinner ?? false,
+                                guestBreakfast: breakfastValue,
+                                guestLunch: lunchValue,
+                                guestDinner: dinnerValue,
+                              );
+                              await _dbService.updateMealStatus(newMeal);
                             }
-                          } else {
-                            var originalMeals = calendarData[day!]!.split('|');
-                            List newMeals = [];
-                            for (int i = 0; i < 3; i++) {
-                              int guest = [breakfastValue, lunchValue, dinnerValue][i];
-                              newMeals.add(getUpdatedMeal(originalMeals[i], guest));
-                            }
-                            calendarData[day!] = newMeals.join('|');
                           }
-                          Navigator.of(context).pop();
+                          if (context.mounted) Navigator.of(context).pop();
                         },
                         child: const Text("Save"),
                       ),
@@ -233,7 +288,9 @@ class _UserHomeState extends State {
           },
         );
       },
-    ).then((_) => setState(() {}));
+    ).then((_) {
+       if (mounted) setState(() {});
+    });
   }
 
   Widget _buildMealSwitch(
@@ -249,7 +306,7 @@ class _UserHomeState extends State {
           ),
           Switch(
             value: value,
-            activeColor: Colors.green,
+            activeTrackColor: Colors.green,
             onChanged: onChanged,
           ),
         ],
@@ -265,10 +322,10 @@ class _UserHomeState extends State {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: const TextStyle(fontSize: 16)),
-          DropdownButton(
+          DropdownButton<int>(
             value: value,
             items: List.generate(6, (i) => DropdownMenuItem(value: i, child: Text("$i"))),
-            onChanged: (v) => onChanged(v!),
+            onChanged: (v) { if (v != null) onChanged(v); },
           ),
         ],
       ),
@@ -277,6 +334,9 @@ class _UserHomeState extends State {
 
   @override
   Widget build(BuildContext context) {
+    if (_user == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
     return Scaffold(
       appBar: AppBar(
         backgroundColor: isMultiSelectMode ? Colors.green[100] : Colors.yellow[100],
@@ -311,7 +371,7 @@ class _UserHomeState extends State {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => ManagerHome()),
+                  MaterialPageRoute(builder: (context) => const ManagerHome()),
                 );
               },
             ),
@@ -340,7 +400,7 @@ class _UserHomeState extends State {
                 Navigator.pop(context);
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => Profile()),
+                  MaterialPageRoute(builder: (context) => const Profile()),
                 );
               },
             ),
@@ -351,7 +411,7 @@ class _UserHomeState extends State {
                 Navigator.pop(context);
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => Transaction()),
+                  MaterialPageRoute(builder: (context) => const Transaction()),
                 );
               },
             ),
@@ -362,7 +422,7 @@ class _UserHomeState extends State {
                 Navigator.pop(context);
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => MealPlanning()),
+                  MaterialPageRoute(builder: (context) => const MealPlanning()),
                 );
               },
             ),
@@ -373,7 +433,7 @@ class _UserHomeState extends State {
                 Navigator.pop(context);
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => Shopping()),
+                  MaterialPageRoute(builder: (context) => const Shopping()),
                 );
               },
             ),
@@ -384,7 +444,7 @@ class _UserHomeState extends State {
                 Navigator.pop(context);
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => History()),
+                  MaterialPageRoute(builder: (context) => const History()),
                 );
               },
             ),
@@ -392,8 +452,11 @@ class _UserHomeState extends State {
             ListTile(
               leading: const Icon(Icons.logout),
               title: const Text('Logout'),
-              onTap: () {
-                Navigator.pop(context);
+              onTap: () async {
+                await _authService.signOut();
+                if (context.mounted) {
+                  Navigator.pop(context);
+                }
               },
             ),
           ],
@@ -464,10 +527,10 @@ class _UserHomeState extends State {
                         child: Container(
                           decoration: BoxDecoration(
                             color: isMultiSelectMode && isSelected
-                                ? Colors.green.withOpacity(0.8)
+                                ? Colors.green.withValues(alpha: 0.8)
                                 : isToday
-                                ? Colors.blue.withOpacity(0.8)
-                                : Colors.white.withOpacity(0.8),
+                                ? Colors.blue.withValues(alpha: 0.8)
+                                : Colors.white.withValues(alpha: 0.8),
                             borderRadius: BorderRadius.circular(8.0),
                             border: isSingleSelected
                                 ? Border.all(
@@ -496,6 +559,18 @@ class _UserHomeState extends State {
                                         fontWeight: FontWeight.bold,
                                       ),
                                     ),
+                                    if (_pendingRequests.containsKey(day))
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                        decoration: BoxDecoration(
+                                          color: Colors.orange,
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: const Text(
+                                          "P",
+                                          style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
                                     if (isMultiSelectMode)
                                       Icon(
                                         isSelected ? Icons.check_circle : Icons.circle_outlined,
@@ -506,14 +581,11 @@ class _UserHomeState extends State {
                                 ),
                                 const Spacer(),
                                 Text(
-                                  calendarData[day]!
-                                      .split('|')
-                                      .asMap()
-                                      .entries
-                                      .map((e) {
-                                    List parts = e.value.split(',');
-                                    return "${['B', 'L', 'D'][e.key]}:${parts[0]}${parts[1] != '0' ? '(${parts[1]})' : ''}";
-                                  }).join('\n'),
+                                  _monthlyMeals[day] == null 
+                                      ? "B:0\nL:0\nD:0"
+                                      : "B:${_monthlyMeals[day]!.breakfast ? '1' : '0'}${_monthlyMeals[day]!.guestBreakfast != 0 ? '(${_monthlyMeals[day]!.guestBreakfast})' : ''}\n"
+                                        "L:${_monthlyMeals[day]!.lunch ? '1' : '0'}${_monthlyMeals[day]!.guestLunch != 0 ? '(${_monthlyMeals[day]!.guestLunch})' : ''}\n"
+                                        "D:${_monthlyMeals[day]!.dinner ? '1' : '0'}${_monthlyMeals[day]!.guestDinner != 0 ? '(${_monthlyMeals[day]!.guestDinner})' : ''}",
                                   style: TextStyle(
                                     color: (isMultiSelectMode &&
                                         isSelected) ||
@@ -542,7 +614,7 @@ class _UserHomeState extends State {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.9),
+                color: Colors.white.withValues(alpha: 0.9),
                 borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(20)),
                 boxShadow: const [
@@ -586,7 +658,7 @@ class _UserHomeState extends State {
   Widget _buildStatCard(String title, String value, Color color) {
     return Expanded(
       child: Card(
-        color: color.withOpacity(0.2),
+        color: color.withValues(alpha: 0.2),
         elevation: 4,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),

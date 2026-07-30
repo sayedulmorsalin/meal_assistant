@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:mess_management/models/meal_model.dart';
+import 'package:mess_management/models/user_model.dart';
+import 'package:mess_management/services/auth_service.dart';
+import 'package:mess_management/services/database_service.dart';
 
 class History extends StatefulWidget {
   const History({super.key});
@@ -9,7 +13,11 @@ class History extends StatefulWidget {
 }
 
 class _HistoryState extends State<History> {
-  final Map<int, String> _calendarData = {};
+  final DatabaseService _dbService = DatabaseService();
+  final AuthService _authService = AuthService();
+  
+  final Map<int, MealModel?> _monthlyMeals = {};
+  UserModel? _user;
   final DateTime _today = DateTime.now();
   final double _totalDeposit = 5000.0;
   final double _mealRate = 50.0;
@@ -17,27 +25,43 @@ class _HistoryState extends State<History> {
   @override
   void initState() {
     super.initState();
-    _initializeSampleData();
+    _loadUserData();
   }
 
-  void _initializeSampleData() {
-    // Sample data - typically from database
-    for (int day = 1; day <= 31; day++) {
-      _calendarData[day] = "0,0|0,0|0,0";
+  void _loadUserData() async {
+    String? uid = _authService.currentUid;
+    if (uid != null) {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      if (doc.exists) {
+        setState(() {
+          _user = UserModel.fromMap(doc.data()!);
+        });
+        _listenToMeals();
+      }
     }
-    // Set some sample meal data
-    _calendarData[5] = "1,0|1,1|1,0";  // B:1, L:1(+1 guest), D:1
-    _calendarData[12] = "1,0|0,0|1,2"; // B:1, D:1(+2 guests)
-    _calendarData[15] = "1,1|1,0|1,0"; // B:1(+1 guest), L:1
+  }
+
+  void _listenToMeals() {
+    if (_user == null || _user!.messId == null) return;
+    _dbService.getUserMonthlyMeals(_user!.uid, _today.year, _today.month).listen((meals) {
+      if (mounted) {
+        setState(() {
+          _monthlyMeals.clear();
+          for (var meal in meals) {
+            _monthlyMeals[meal.date.day] = meal;
+          }
+        });
+      }
+    });
   }
 
   int get _totalMeals {
     int sum = 0;
-    _calendarData.forEach((key, value) {
-      List<String> meals = value.split('|');
-      for (var meal in meals) {
-        List<String> parts = meal.split(',');
-        sum += int.parse(parts[0]);
+    _monthlyMeals.forEach((key, meal) {
+      if (meal != null) {
+        if (meal.breakfast) sum += 1 + meal.guestBreakfast;
+        if (meal.lunch) sum += 1 + meal.guestLunch;
+        if (meal.dinner) sum += 1 + meal.guestDinner;
       }
     });
     return sum;
@@ -104,14 +128,11 @@ class _HistoryState extends State<History> {
                                 Padding(
                                   padding: const EdgeInsets.only(top: 2.0),
                                   child: Text(
-                                    _calendarData[day]!
-                                        .split('|')
-                                        .asMap()
-                                        .entries
-                                        .map((e) {
-                                      List<String> parts = e.value.split(',');
-                                      return "${['B', 'L', 'D'][e.key]}:${parts[0]}${parts[1] != '0' ? '(+${parts[1]})' : ''}";
-                                    }).join('\n'),
+                                    _monthlyMeals[day] == null 
+                                        ? "B:0\nL:0\nD:0"
+                                        : "B:${_monthlyMeals[day]!.breakfast ? '1' : '0'}${_monthlyMeals[day]!.guestBreakfast != 0 ? '(+${_monthlyMeals[day]!.guestBreakfast})' : ''}\n"
+                                          "L:${_monthlyMeals[day]!.lunch ? '1' : '0'}${_monthlyMeals[day]!.guestLunch != 0 ? '(+${_monthlyMeals[day]!.guestLunch})' : ''}\n"
+                                          "D:${_monthlyMeals[day]!.dinner ? '1' : '0'}${_monthlyMeals[day]!.guestDinner != 0 ? '(+${_monthlyMeals[day]!.guestDinner})' : ''}",
                                     style: TextStyle(
                                       color: isToday ? Colors.blue : Colors.grey[800],
                                       fontSize: 12,

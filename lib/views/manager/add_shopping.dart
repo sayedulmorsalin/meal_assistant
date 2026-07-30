@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:mess_management/services/database_service.dart';
+import 'package:mess_management/services/auth_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:mess_management/models/user_model.dart';
 
 class ProductItem {
   final String productName;
@@ -7,13 +11,12 @@ class ProductItem {
   final double price;
 
   ProductItem(this.productName, this.quantity, this.price);
-}
 
-class ShoppingTable {
-  final DateTime date;
-  final List<ProductItem> items;
-
-  ShoppingTable(this.date, this.items);
+  Map<String, dynamic> toMap() => {
+    'productName': productName,
+    'quantity': quantity,
+    'price': price,
+  };
 }
 
 class InputRow {
@@ -30,8 +33,27 @@ class AddShopping extends StatefulWidget {
 }
 
 class _AddShoppingState extends State<AddShopping> {
-  final List<ShoppingTable> _tables = [];
+  final DatabaseService _dbService = DatabaseService();
+  final AuthService _authService = AuthService();
+  UserModel? _user;
+
   final List<InputRow> _inputRows = [InputRow()];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUser();
+  }
+
+  void _loadUser() async {
+    String? uid = _authService.currentUid;
+    if (uid != null) {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      if (doc.exists) {
+        setState(() => _user = UserModel.fromMap(doc.data()!));
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -43,7 +65,9 @@ class _AddShoppingState extends State<AddShopping> {
     super.dispose();
   }
 
-  void _saveItems() {
+  void _saveItems() async {
+    if (_user == null || _user!.messId == null) return;
+
     final List<ProductItem> newItems = [];
     for (final row in _inputRows) {
       final productName = row.productController.text;
@@ -56,28 +80,24 @@ class _AddShoppingState extends State<AddShopping> {
     }
 
     if (newItems.isNotEmpty) {
-      final now = DateTime.now();
-      final currentDate = DateTime(now.year, now.month, now.day);
+      await _dbService.saveShoppingRecord(
+        _user!.messId!,
+        DateTime.now(),
+        newItems.map((e) => e.toMap()).toList()
+      );
 
       setState(() {
-        final existingTableIndex = _tables.indexWhere(
-              (table) => table.date.isAtSameMomentAs(currentDate),
-        );
-
-        if (existingTableIndex != -1) {
-          _tables[existingTableIndex].items.addAll(newItems);
-        } else {
-          _tables.add(ShoppingTable(currentDate, newItems));
-        }
-
         _inputRows.clear();
         _inputRows.add(InputRow());
       });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Shopping record saved successfully')),
+        );
+      }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter at least one valid item'),
-        ),
+        const SnackBar(content: Text('Please enter at least one valid item')),
       );
     }
   }
@@ -122,7 +142,7 @@ class _AddShoppingState extends State<AddShopping> {
                 labelText: 'Price',
                 border: OutlineInputBorder(),
               ),
-              keyboardType: TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
               onSubmitted: (value) {
                 if (row.productController.text.isNotEmpty &&
                     row.quantityController.text.isNotEmpty &&
@@ -141,8 +161,10 @@ class _AddShoppingState extends State<AddShopping> {
 
   @override
   Widget build(BuildContext context) {
+    if (_user == null) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Shopping Records')),
+      appBar: AppBar(title: const Text('Add Shopping Record')),
       body: Column(
         children: [
           Expanded(
@@ -190,71 +212,52 @@ class _AddShoppingState extends State<AddShopping> {
             ),
           ),
           const Divider(height: 2),
+          const Padding(
+            padding: EdgeInsets.all(8.0),
+            child: Text("Recent History", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          ),
           Expanded(
-            child: _tables.isEmpty
-                ? const Center(child: Text('No saved records'))
-                : ListView.builder(
-              itemCount: _tables.length,
-              itemBuilder: (context, index) {
-                final table = _tables[index];
-                final total = table.items.fold(
-                  0.0,
-                      (sum, item) => sum + item.price,
-                );
+            child: StreamBuilder<List<Map<String, dynamic>>>(
+              stream: _dbService.getShoppingHistory(_user!.messId!),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                final records = snapshot.data!;
+                return ListView.builder(
+                  itemCount: records.length,
+                  itemBuilder: (context, index) {
+                    final record = records[index];
+                    final date = (record['date'] as Timestamp).toDate();
+                    final items = (record['items'] as List);
+                    double total = items.fold(0.0, (sum, item) => sum + ((item['price'] as num).toDouble() * (item['quantity'] as num).toInt()));
 
-                return Card(
-                  margin: const EdgeInsets.all(8),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          DateFormat('yyyy-MM-dd').format(table.date),
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: DataTable(
+                    return Card(
+                      margin: const EdgeInsets.all(8),
+                      child: ExpansionTile(
+                        title: Text(DateFormat('yyyy-MM-dd').format(date)),
+                        subtitle: Text('Total: ₹${total.toStringAsFixed(2)}'),
+                        children: [
+                          DataTable(
                             columns: const [
                               DataColumn(label: Text('Product')),
                               DataColumn(label: Text('Qty')),
                               DataColumn(label: Text('Price')),
                             ],
-                            rows: table.items.map((item) {
+                            rows: items.map((item) {
                               return DataRow(
                                 cells: [
-                                  DataCell(Text(item.productName)),
-                                  DataCell(Text(item.quantity.toString())),
-                                  DataCell(Text('৳${item.price.toStringAsFixed(2)}')),
+                                  DataCell(Text(item['productName'])),
+                                  DataCell(Text(item['quantity'].toString())),
+                                  DataCell(Text('₹${(item['price'] * item['quantity']).toStringAsFixed(2)}')),
                                 ],
                               );
                             }).toList(),
                           ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              Text(
-                                'Total: ৳${total.toStringAsFixed(2)}',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                        ],
+                      ),
+                    );
+                  },
                 );
-              },
+              }
             ),
           ),
         ],

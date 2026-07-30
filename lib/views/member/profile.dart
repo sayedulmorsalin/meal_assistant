@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'package:mess_management/services/auth_service.dart';
 
 class Profile extends StatefulWidget {
   const Profile({super.key});
@@ -152,9 +153,12 @@ class _ProfileState extends State<Profile> {
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () {
-              // Add logout logic here
-              Navigator.of(context).pop();
+            onPressed: () async {
+              await AuthService().signOut();
+              if (context.mounted) {
+                Navigator.of(context).pop(); // Close dialog
+                Navigator.of(context).popUntil((route) => route.isFirst); // Go back to AuthWrapper
+              }
             },
             child: const Text('Logout'),
           ),
