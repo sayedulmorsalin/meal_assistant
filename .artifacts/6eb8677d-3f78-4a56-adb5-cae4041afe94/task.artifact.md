@@ -1,0 +1,6 @@
+- [ ] Add dependencies (`provider`, `shared_preferences`) to `pubspec.yaml`
+- [ ] Create `ThemeProvider` in `lib/core/theme_provider.dart`
+- [ ] Initialize `ThemeProvider` in `lib/main.dart` and configure `MaterialApp`
+- [ ] Create `SettingsPage` in `lib/views/settings/settings_page.dart`
+- [ ] Update `Profile` in `lib/views/member/profile.dart` to link to the new `SettingsPage`
+- [ ] Verify theme switching functionality
