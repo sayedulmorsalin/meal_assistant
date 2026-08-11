@@ -20,8 +20,8 @@ class _HistoryState extends State<History> {
   final Map<int, MealModel?> _monthlyMeals = {};
   UserModel? _user;
   final DateTime _today = DateTime.now();
-  double _totalDeposit = 5000.0;
-  double _mealRate = 50.0;
+  double _monthlyShoppingTotal = 0.0;
+  List<MealModel> _allMessMeals = [];
   bool _isLoading = true;
 
   @override
@@ -47,16 +47,15 @@ class _HistoryState extends State<History> {
     if (_user == null || _user!.messId == null) return;
     String messId = _user!.messId!;
 
-    FirebaseFirestore.instance.collection('messes').doc(messId).snapshots().listen((doc) {
-      if (doc.exists && mounted) {
-        setState(() {
-          _totalDeposit = (doc.data()?['totalDeposit'] ?? 5000.0).toDouble();
-          _mealRate = (doc.data()?['mealRate'] ?? 50.0).toDouble();
-        });
-      }
+    _dbService.getMonthlyShoppingTotal(messId, _today.year, _today.month).listen((shoppingTotal) {
+      if (mounted) setState(() => _monthlyShoppingTotal = shoppingTotal);
     });
 
-    _dbService.getUserMonthlyMeals(_user!.uid, _today.year, _today.month).listen((meals) {
+    _dbService.getMessMonthlyMeals(messId, _today.year, _today.month).listen((messMeals) {
+      if (mounted) setState(() => _allMessMeals = messMeals);
+    });
+
+    _dbService.getUserMonthlyMeals(_user!.uid, messId, _today.year, _today.month).listen((meals) {
       if (mounted) {
         setState(() {
           _monthlyMeals.clear();
@@ -81,7 +80,19 @@ class _HistoryState extends State<History> {
     return sum;
   }
 
-  double get _availableBalance => _totalDeposit - (_totalMeals * _mealRate);
+  int get _totalMessMeals {
+    int sum = 0;
+    for (var meal in _allMessMeals) {
+      if (meal.breakfast) sum += 1 + meal.guestBreakfast;
+      if (meal.lunch) sum += 1 + meal.guestLunch;
+      if (meal.dinner) sum += 1 + meal.guestDinner;
+    }
+    return sum;
+  }
+
+  double get _mealRate => _totalMessMeals > 0 ? (_monthlyShoppingTotal / _totalMessMeals) : 0.0;
+  double get _userDeposit => _user?.deposit ?? 0.0;
+  double get _availableBalance => _userDeposit - (_totalMeals * _mealRate);
 
   @override
   Widget build(BuildContext context) {
@@ -106,7 +117,7 @@ class _HistoryState extends State<History> {
                     crossAxisSpacing: 4.0,
                     childAspectRatio: 0.7,
                   ),
-                  itemCount: 31,
+                  itemCount: DateUtils.getDaysInMonth(_today.year, _today.month),
                   itemBuilder: (context, index) {
                     int day = index + 1;
                     bool isToday = day == _today.day;
@@ -187,7 +198,7 @@ class _HistoryState extends State<History> {
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
                       _buildStatCard("Total Deposit",
-                          "৳${_totalDeposit.toStringAsFixed(2)}", AppColors.success),
+                          "৳${_userDeposit.toStringAsFixed(2)}", AppColors.success),
                       _buildStatCard("Available Balance",
                           "৳${_availableBalance.toStringAsFixed(2)}", Theme.of(context).colorScheme.primary),
                     ],

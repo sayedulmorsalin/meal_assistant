@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 enum UserRole { member, manager, superAdmin }
 
 class UserModel {
@@ -9,6 +11,8 @@ class UserModel {
   final String? messId;
   final String? profileImage;
   final String status;
+  final double deposit;
+  final DateTime? createdAt;
 
   UserModel({
     required this.uid,
@@ -19,6 +23,8 @@ class UserModel {
     this.messId,
     this.profileImage,
     required this.status,
+    this.deposit = 0.0,
+    this.createdAt,
   });
 
   Map<String, dynamic> toMap() {
@@ -31,6 +37,8 @@ class UserModel {
       'messId': messId,
       'profileImage': profileImage,
       'status': status,
+      'deposit': deposit,
+      'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
     };
   }
 
@@ -52,6 +60,8 @@ class UserModel {
       messId: map['messId'],
       profileImage: map['profileImage'],
       status: map['status'] ?? '',
+      deposit: (map['deposit'] ?? 0.0).toDouble(),
+      createdAt: map['createdAt'] is Timestamp ? (map['createdAt'] as Timestamp).toDate() : null,
     );
   }
 }

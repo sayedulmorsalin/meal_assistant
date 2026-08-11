@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
-import 'login.dart';
 
 class Register extends StatefulWidget {
   const Register({super.key});
@@ -36,10 +35,10 @@ class _RegisterState extends State<Register> {
     setState(() => _isLoading = false);
 
     if (error == null) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const Login()),
-      );
+      // AuthWrapper in main.dart will handle navigation automatically
+      // We can just pop the registration screen if needed, or do nothing.
+      // Since it was pushed from Login, popping will go back to the root AuthWrapper which will show the new state.
+      Navigator.pop(context);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

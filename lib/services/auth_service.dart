@@ -40,9 +40,12 @@ class AuthService {
   // Login
   Future<String?> login(String email, String password) async {
     try {
+      print("AuthService: Attempting login for $email");
       await _auth.signInWithEmailAndPassword(email: email, password: password);
+      print("AuthService: Login success for $email");
       return null; // Success
     } on FirebaseAuthException catch (e) {
+      print("AuthService: FirebaseAuthException during login: ${e.code} - ${e.message}");
       switch (e.code) {
         case 'user-not-found':
           return 'No user found with this email.';
@@ -58,6 +61,7 @@ class AuthService {
           return e.message ?? "An error occurred during login.";
       }
     } catch (e) {
+      print("AuthService: Unknown error during login: $e");
       return e.toString();
     }
   }

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/meal_model.dart';
 import '../../models/request_model.dart';
 import '../../models/user_model.dart';
@@ -9,10 +9,11 @@ import 'add_meal_planning.dart';
 import 'add_shopping.dart';
 import 'manager_messaging.dart';
 import 'meal_member.dart';
+
 import '../admin/admin_home.dart';
-import '../member/history.dart';
 import '../member/profile.dart';
-import '../member/transaction.dart';
+import '../member/meal_requests.dart';
+import '../member/user_home.dart';
 import '../../core/app_colors.dart';
 
 class ManagerHome extends StatefulWidget {
@@ -28,15 +29,20 @@ class _ManagerHomeState extends State<ManagerHome> {
 
   UserModel? _manager;
   final DateTime today = DateTime.now();
+  DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
   List<int> selectedDays = [];
   bool isMultiSelectMode = false;
   int? selectedDay;
-  double totalDeposit = 5000.0;
-  double mealRate = 50.0;
+  double totalShoppingCost = 0.0;
 
   List<UserModel> _members = [];
   List<RequestModel> _pendingRequests = [];
   final Map<int, List<MealModel>> _monthlyMeals = {};
+
+  final List<String> _monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
 
   @override
   void initState() {
@@ -65,13 +71,8 @@ class _ManagerHomeState extends State<ManagerHome> {
       if (mounted) setState(() => _members = members);
     });
 
-    FirebaseFirestore.instance.collection('messes').doc(messId).snapshots().listen((doc) {
-      if (doc.exists && mounted) {
-        setState(() {
-          totalDeposit = (doc.data()?['totalDeposit'] ?? 5000.0).toDouble();
-          mealRate = (doc.data()?['mealRate'] ?? 50.0).toDouble();
-        });
-      }
+    _dbService.getMonthlyShoppingTotal(messId, _selectedMonth.year, _selectedMonth.month).listen((shoppingTotal) {
+      if (mounted) setState(() => totalShoppingCost = shoppingTotal);
     });
 
     _dbService.getPendingRequests(messId).listen((requests) {
@@ -80,8 +81,8 @@ class _ManagerHomeState extends State<ManagerHome> {
 
     FirebaseFirestore.instance.collection('meals')
         .where('messId', isEqualTo: messId)
-        .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(DateTime(today.year, today.month, 1)))
-        .where('date', isLessThan: Timestamp.fromDate(DateTime(today.year, today.month + 1, 1)))
+        .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(DateTime(_selectedMonth.year, _selectedMonth.month, 1)))
+        .where('date', isLessThan: Timestamp.fromDate(DateTime(_selectedMonth.year, _selectedMonth.month + 1, 1)))
         .snapshots()
         .listen((snapshot) {
       if (mounted) {
@@ -96,19 +97,71 @@ class _ManagerHomeState extends State<ManagerHome> {
     });
   }
 
-  int get totalMeals {
-    int sum = 0;
-    _monthlyMeals.forEach((day, meals) {
-      for (var meal in meals) {
-        if (meal.breakfast) sum += 1 + meal.guestBreakfast;
-        if (meal.lunch) sum += 1 + meal.guestLunch;
-        if (meal.dinner) sum += 1 + meal.guestDinner;
+  bool _isDefaultMealOn(UserModel? user, DateTime selectedMonth, int day) {
+    DateTime now = DateTime.now();
+    DateTime joinDate = user?.createdAt ?? DateTime(now.year, now.month, 1);
+    
+    if (selectedMonth.year < joinDate.year || 
+       (selectedMonth.year == joinDate.year && selectedMonth.month < joinDate.month)) {
+      return false;
+    }
+    
+    if (selectedMonth.year > now.year || 
+       (selectedMonth.year == now.year && selectedMonth.month > now.month)) {
+      return false;
+    }
+    
+    if (selectedMonth.year == joinDate.year && selectedMonth.month == joinDate.month) {
+      if (day < joinDate.day) {
+        return false;
       }
-    });
+    }
+    
+    return true;
+  }
+
+  int get maxElapsedDay {
+    if (_selectedMonth.year < today.year || 
+       (_selectedMonth.year == today.year && _selectedMonth.month < today.month)) {
+      return DateUtils.getDaysInMonth(_selectedMonth.year, _selectedMonth.month);
+    } else if (_selectedMonth.year == today.year && _selectedMonth.month == today.month) {
+      return today.day;
+    } else {
+      return 0;
+    }
+  }
+
+  int get totalElapsedMeals {
+    int sum = 0;
+    int limit = maxElapsedDay;
+    for (int d = 1; d <= limit; d++) {
+      final dayMeals = _monthlyMeals[d] ?? [];
+      for (var member in _members) {
+        bool defaultOn = _isDefaultMealOn(member, _selectedMonth, d);
+        final meal = dayMeals.firstWhere(
+          (m) => m.userId == member.uid,
+          orElse: () => MealModel(
+            id: "", userId: member.uid, messId: "",
+            date: DateTime(_selectedMonth.year, _selectedMonth.month, d),
+            breakfast: false, lunch: defaultOn, dinner: defaultOn,
+          ),
+        );
+        if (meal.breakfast) sum += 1;
+        sum += meal.guestBreakfast;
+        if (meal.lunch) sum += 1;
+        sum += meal.guestLunch;
+        if (meal.dinner) sum += 1;
+        sum += meal.guestDinner;
+      }
+    }
     return sum;
   }
 
-  double get availableBalance => totalDeposit - (totalMeals * mealRate);
+  int get totalMeals => totalElapsedMeals;
+
+  double get totalDeposit => _members.fold(0.0, (totalSum, m) => totalSum + m.deposit);
+  double get mealRate => totalElapsedMeals > 0 ? (totalShoppingCost / totalElapsedMeals) : 0.0;
+  double get availableBalance => totalDeposit - totalShoppingCost;
 
   void _showSingleDayUsers(BuildContext context, int day) {
     showModalBottomSheet(
@@ -129,7 +182,11 @@ class _ManagerHomeState extends State<ManagerHome> {
                     final member = _members[index];
                     final meal = dayMeals.firstWhere(
                       (m) => m.userId == member.uid, 
-                      orElse: () => MealModel(id: "", userId: member.uid, messId: "", date: DateTime.now())
+                      orElse: () => MealModel(
+                        id: "", userId: member.uid, messId: "", 
+                        date: DateTime(_selectedMonth.year, _selectedMonth.month, day),
+                        breakfast: false, lunch: true, dinner: true,
+                      )
                     );
                     return ListTile(
                       title: Text(member.name),
@@ -196,9 +253,9 @@ class _ManagerHomeState extends State<ManagerHome> {
                       subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Breakfast: $totalBreakfast (${totalGuestBreakfast} guests)'),
-                          Text('Lunch: $totalLunch (${totalGuestLunch} guests)'),
-                          Text('Dinner: $totalDinner (${totalGuestDinner} guests)'),
+                          Text('Breakfast: $totalBreakfast ($totalGuestBreakfast guests)'),
+                          Text('Lunch: $totalLunch ($totalGuestLunch guests)'),
+                          Text('Dinner: $totalDinner ($totalGuestDinner guests)'),
                         ],
                       ),
                     );
@@ -329,6 +386,14 @@ class _ManagerHomeState extends State<ManagerHome> {
               ],
             ),
             IconButton(
+              icon: const Icon(Icons.person_pin),
+              tooltip: 'My Personal Meals',
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const UserHome()),
+              ),
+            ),
+            IconButton(
               icon: const Icon(Icons.message),
               onPressed: () => Navigator.push(
                 context,
@@ -342,18 +407,50 @@ class _ManagerHomeState extends State<ManagerHome> {
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
-            DrawerHeader(
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primaryContainer,
-              ),
-              child: const Text(
-                'Meal Assistant',
+            UserAccountsDrawerHeader(
+              accountName: Text(
+                _manager?.name ?? 'Manager',
                 style: TextStyle(
-                  fontSize: 24,
                   fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                  color: Theme.of(context).colorScheme.onPrimary,
                 ),
               ),
+              accountEmail: Text(
+                _manager?.email ?? '',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.9),
+                ),
+              ),
+              currentAccountPicture: CircleAvatar(
+                backgroundColor: Theme.of(context).colorScheme.onPrimary,
+                child: Text(
+                  _manager?.name.isNotEmpty == true ? _manager!.name[0].toUpperCase() : 'M',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              ),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary,
+              ),
             ),
+            ListTile(
+              leading: const Icon(Icons.person_pin, color: AppColors.primary),
+              title: const Text('My Personal Meals'),
+              subtitle: const Text('View & edit your personal meals as a member'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const UserHome()),
+                );
+              },
+            ),
+            const Divider(),
             if (_manager?.role == UserRole.superAdmin)
               ListTile(
                 leading: const Icon(Icons.admin_panel_settings, color: Colors.amber),
@@ -369,60 +466,67 @@ class _ManagerHomeState extends State<ManagerHome> {
             ListTile(
               leading: const Icon(Icons.person),
               title: const Text('Profile'),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const Profile()),
-              ),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const Profile()),
+                );
+              },
             ),
             ListTile(
               leading: const Icon(Icons.people),
-              title: const Text('Meal member'),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const MealMember()),
-              ),
+              title: const Text('Members & Deposits'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const MealMember()),
+                );
+              },
             ),
-            ListTile(
-              leading: const Icon(Icons.list_alt),
-              title: const Text('Transaction'),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const Transaction()),
-              ),
-            ),
+
             ListTile(
               leading: const Icon(Icons.list),
               title: const Text('Meal planning'),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const AddMealPlanning()),
-              ),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const AddMealPlanning()),
+                );
+              },
             ),
             ListTile(
               leading: const Icon(Icons.shop),
               title: const Text('Shopping'),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const AddShopping()),
-              ),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const AddShopping()),
+                );
+              },
             ),
+
             ListTile(
-              leading: const Icon(Icons.history),
-              title: const Text('Meal History'),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const History()),
-              ),
+              leading: const Icon(Icons.assignment),
+              title: const Text('Meal Requests History'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const MealRequestsScreen()),
+                );
+              },
             ),
             const Divider(),
             ListTile(
               leading: const Icon(Icons.logout),
               title: const Text('Logout'),
               onTap: () async {
+                Navigator.pop(context);
                 await _authService.signOut();
-                if (context.mounted) {
-                  Navigator.pop(context);
-                }
               },
             ),
           ],
@@ -432,6 +536,65 @@ class _ManagerHomeState extends State<ManagerHome> {
         color: Theme.of(context).colorScheme.surface,
         child: Column(
           children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.15),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.chevron_left, size: 20),
+                    onPressed: () {
+                      setState(() {
+                        _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month - 1, 1);
+                        _listenToData();
+                      });
+                    },
+                  ),
+                  Text(
+                    "${_monthNames[_selectedMonth.month - 1]} ${_selectedMonth.year}",
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.chevron_right, size: 20),
+                    onPressed: () {
+                      setState(() {
+                        _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month + 1, 1);
+                        _listenToData();
+                      });
+                    },
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.25),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "Total Mess Meals: $totalElapsedMeals (Days 1 - $maxElapsedDay)",
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.person, size: 14),
+                    label: const Text("My Personal Meals", style: TextStyle(fontSize: 11)),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const UserHome()),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.all(8.0),
@@ -440,12 +603,12 @@ class _ManagerHomeState extends State<ManagerHome> {
                     crossAxisCount: 7,
                     mainAxisSpacing: 4.0,
                     crossAxisSpacing: 4.0,
-                    childAspectRatio: 0.7,
+                    childAspectRatio: 0.55,
                   ),
-                  itemCount: 31,
+                  itemCount: DateUtils.getDaysInMonth(_selectedMonth.year, _selectedMonth.month),
                   itemBuilder: (context, index) {
                     int day = index + 1;
-                    bool isToday = day == today.day;
+                    bool isToday = day == today.day && _selectedMonth.year == today.year && _selectedMonth.month == today.month;
                     bool isSelected = selectedDays.contains(day);
                     bool isSingleSelected = selectedDay == day && !isMultiSelectMode;
 
@@ -494,48 +657,69 @@ class _ManagerHomeState extends State<ManagerHome> {
                                     : Border.all(color: Theme.of(context).colorScheme.outlineVariant),
                               ),
                               child: Padding(
-                                padding: const EdgeInsets.only(left: 8.0),
+                                padding: const EdgeInsets.all(4.0),
                                 child: Align(
-                                  alignment: Alignment.centerLeft,
+                                  alignment: Alignment.topLeft,
                                   child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         "$day",
                                         style: TextStyle(
                                           color: isToday ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface,
-                                          fontSize: 18,
+                                          fontSize: 16,
                                           fontWeight: FontWeight.bold,
                                         ),
                                       ),
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 2.0),
-                                  child: Text(
-                                    () {
-                                      final dayMeals = _monthlyMeals[day] ?? [];
-                                      int b = 0, l = 0, d = 0;
-                                      int gb = 0, gl = 0, gd = 0;
-                                      for (var meal in dayMeals) {
-                                        if (meal.breakfast) { b++; gb += meal.guestBreakfast; }
-                                        if (meal.lunch) { l++; gl += meal.guestLunch; }
-                                        if (meal.dinner) { d++; gd += meal.guestDinner; }
-                                      }
-                                      return "B:$b${gb > 0 ? '($gb)' : ''}\n"
-                                             "L:$l${gl > 0 ? '($gl)' : ''}\n"
-                                             "D:$d${gd > 0 ? '($gd)' : ''}";
-                                    }(),
-                                    style: TextStyle(
-                                      color: isToday ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      height: 1.0,
-                                    ),
-                                    textAlign: TextAlign.left,
-                                    overflow: TextOverflow.ellipsis,
-                                    maxLines: 3,
-                                  ),
-                                ),
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 2.0),
+                                        child: Text(
+                                          () {
+                                            final dayMeals = _monthlyMeals[day] ?? [];
+                                            int b = 0, l = 0, d = 0;
+                                            int gb = 0, gl = 0, gd = 0;
+                                            if (_members.isNotEmpty) {
+                                              for (var member in _members) {
+                                                bool defaultOn = _isDefaultMealOn(member, _selectedMonth, day);
+                                                final meal = dayMeals.firstWhere(
+                                                  (m) => m.userId == member.uid,
+                                                  orElse: () => MealModel(
+                                                    id: "", userId: member.uid, messId: "",
+                                                    date: DateTime(_selectedMonth.year, _selectedMonth.month, day),
+                                                    breakfast: false, lunch: defaultOn, dinner: defaultOn,
+                                                  ),
+                                                );
+                                                if (meal.breakfast) b++;
+                                                gb += meal.guestBreakfast;
+                                                if (meal.lunch) l++;
+                                                gl += meal.guestLunch;
+                                                if (meal.dinner) d++;
+                                                gd += meal.guestDinner;
+                                              }
+                                            } else {
+                                              for (var meal in dayMeals) {
+                                                if (meal.breakfast) { b++; gb += meal.guestBreakfast; }
+                                                if (meal.lunch) { l++; gl += meal.guestLunch; }
+                                                if (meal.dinner) { d++; gd += meal.guestDinner; }
+                                              }
+                                            }
+                                            int totalDayMeals = (b + gb) + (l + gl) + (d + gd);
+                                            return "Total: $totalDayMeals\n"
+                                                   "B: ${b + gb}\n"
+                                                   "L: ${l + gl}\n"
+                                                   "D: ${d + gd}";
+                                          }(),
+                                          style: TextStyle(
+                                            color: isToday ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface,
+                                            fontSize: 12.0,
+                                            fontWeight: FontWeight.w800,
+                                            height: 1.15,
+                                          ),
+                                          textAlign: TextAlign.left,
+                                          overflow: TextOverflow.ellipsis,
+                                          maxLines: 5,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -577,15 +761,17 @@ class _ManagerHomeState extends State<ManagerHome> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      _buildStatCard("Total Deposit", "₹${totalDeposit.toStringAsFixed(2)}", AppColors.success),
-                      _buildStatCard("Available Balance", "₹${availableBalance.toStringAsFixed(2)}", Theme.of(context).colorScheme.primary),
+                      _buildStatCard("Total Deposit", "৳${totalDeposit.toStringAsFixed(2)}", AppColors.success, onTap: () {
+                        Navigator.push(context, MaterialPageRoute(builder: (context) => const MealMember()));
+                      }),
+                      _buildStatCard("Available Balance", "৳${availableBalance.toStringAsFixed(2)}", Theme.of(context).colorScheme.primary),
                     ],
                   ),
                   const SizedBox(height: 10),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      _buildStatCard("Meal Rate", "₹${mealRate.toStringAsFixed(2)}", AppColors.warning),
+                      _buildStatCard("Meal Rate", "৳${mealRate.toStringAsFixed(2)}", AppColors.warning),
                       _buildStatCard("Total Meals", totalMeals.toString(), AppColors.info),
                     ],
                   ),
@@ -598,36 +784,39 @@ class _ManagerHomeState extends State<ManagerHome> {
     );
   }
 
-  Widget _buildStatCard(String title, String value, Color color) {
+  Widget _buildStatCard(String title, String value, Color color, {VoidCallback? onTap}) {
     return Expanded(
-      child: Card(
-        color: color.withValues(alpha: 0.2),
-        elevation: 4,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.outline,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Card(
+          color: color.withValues(alpha: 0.2),
+          elevation: 4,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.outline,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: color,
+                const SizedBox(height: 8),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

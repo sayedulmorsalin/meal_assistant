@@ -21,8 +21,7 @@ class _HistoryAdminState extends State<HistoryAdmin> {
   bool _isLoading = true;
   final DateTime _today = DateTime.now();
   
-  double _totalDeposit = 5000.0;
-  double _mealRate = 50.0;
+  double _monthlyShoppingTotal = 0.0;
   
   List<UserModel> _members = [];
   final Map<int, List<MealModel>> _monthlyMeals = {};
@@ -48,13 +47,8 @@ class _HistoryAdminState extends State<HistoryAdmin> {
     if (_user == null || _user!.messId == null) return;
     String messId = _user!.messId!;
 
-    FirebaseFirestore.instance.collection('messes').doc(messId).snapshots().listen((doc) {
-      if (doc.exists && mounted) {
-        setState(() {
-          _totalDeposit = (doc.data()?['totalDeposit'] ?? 5000.0).toDouble();
-          _mealRate = (doc.data()?['mealRate'] ?? 50.0).toDouble();
-        });
-      }
+    _dbService.getMonthlyShoppingTotal(messId, _today.year, _today.month).listen((shoppingTotal) {
+      if (mounted) setState(() => _monthlyShoppingTotal = shoppingTotal);
     });
 
     _dbService.getMessMembers(messId).listen((members) {
@@ -86,7 +80,9 @@ class _HistoryAdminState extends State<HistoryAdmin> {
     return sum;
   }
 
-  double get _availableBalance => _totalDeposit - (_totalMeals * _mealRate);
+  double get _totalDeposit => _members.fold(0.0, (totalSum, m) => totalSum + m.deposit);
+  double get _mealRate => _totalMeals > 0 ? (_monthlyShoppingTotal / _totalMeals) : 0.0;
+  double get _availableBalance => _totalDeposit - _monthlyShoppingTotal;
 
   void _showDayDetails(BuildContext context, int day) {
     showModalBottomSheet(
@@ -151,7 +147,7 @@ class _HistoryAdminState extends State<HistoryAdmin> {
                     crossAxisSpacing: 4.0,
                     childAspectRatio: 0.7,
                   ),
-                  itemCount: 31,
+                  itemCount: DateUtils.getDaysInMonth(_today.year, _today.month),
                   itemBuilder: (context, index) {
                     int day = index + 1;
                     bool isToday = day == _today.day;
@@ -240,9 +236,9 @@ class _HistoryAdminState extends State<HistoryAdmin> {
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
                       _buildStatCard("Total Deposit",
-                          "₹${_totalDeposit.toStringAsFixed(2)}", AppColors.success),
+                          "৳${_totalDeposit.toStringAsFixed(2)}", AppColors.success),
                       _buildStatCard("Available Balance",
-                          "₹${_availableBalance.toStringAsFixed(2)}", Theme.of(context).colorScheme.primary),
+                          "৳${_availableBalance.toStringAsFixed(2)}", Theme.of(context).colorScheme.primary),
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -250,7 +246,7 @@ class _HistoryAdminState extends State<HistoryAdmin> {
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
                       _buildStatCard("Meal Rate",
-                          "₹${_mealRate.toStringAsFixed(2)}", AppColors.warning),
+                          "৳${_mealRate.toStringAsFixed(2)}", AppColors.warning),
                       _buildStatCard(
                           "Total Meals", _totalMeals.toString(), AppColors.info),
                     ],

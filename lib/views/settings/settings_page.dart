@@ -1,3 +1,4 @@
+// ignore_for_file: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme_provider.dart';
@@ -55,8 +56,8 @@ class SettingsPage extends StatelessWidget {
               if (value != null) themeProvider.setThemeMode(value);
             },
           ),
-          Divider(),
-          // Add more settings here if needed
+
+          const Divider(),
         ],
       ),
     );

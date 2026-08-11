@@ -4,6 +4,8 @@ class MessModel {
   final String joinKey;
   final String superAdminId;
   final String? managerId;
+  final double mealRate;
+  final double totalDeposit;
 
   MessModel({
     required this.id,
@@ -11,6 +13,8 @@ class MessModel {
     required this.joinKey,
     required this.superAdminId,
     this.managerId,
+    this.mealRate = 0.0,
+    this.totalDeposit = 0.0,
   });
 
   Map<String, dynamic> toMap() {
@@ -20,6 +24,8 @@ class MessModel {
       'joinKey': joinKey,
       'superAdminId': superAdminId,
       'managerId': managerId,
+      'mealRate': mealRate,
+      'totalDeposit': totalDeposit,
     };
   }
 
@@ -30,6 +36,8 @@ class MessModel {
       joinKey: map['joinKey'] ?? '',
       superAdminId: map['superAdminId'] ?? '',
       managerId: map['managerId'],
+      mealRate: (map['mealRate'] ?? 0.0).toDouble(),
+      totalDeposit: (map['totalDeposit'] ?? 0.0).toDouble(),
     );
   }
 }

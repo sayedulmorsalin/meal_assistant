@@ -4,7 +4,6 @@ import 'package:mess_management/views/admin/create_mess.dart';
 import 'package:mess_management/views/member/join.dart';
 import 'package:mess_management/services/auth_service.dart';
 import 'package:mess_management/models/user_model.dart';
-import 'package:mess_management/views/admin/admin_home.dart';
 import 'package:mess_management/views/manager/manager_home.dart';
 import 'package:mess_management/views/member/user_home.dart';
 
@@ -33,15 +32,19 @@ class _LandpageState extends State<Landpage> {
         if (user.messId != null && user.messId!.isNotEmpty) {
           if (!mounted) return;
           Widget homePage;
-          switch (user.role) {
-            case UserRole.superAdmin:
-              homePage = const AdminHome();
-              break;
-            case UserRole.manager:
-              homePage = const ManagerHome();
-              break;
-            default:
-              homePage = const UserHome();
+          if (user.role == UserRole.superAdmin) {
+            // SuperAdmin: navigate based on participationRole
+            homePage = user.participationRole == UserRole.manager
+                ? const ManagerHome()
+                : const UserHome();
+          } else {
+            switch (user.role) {
+              case UserRole.manager:
+                homePage = const ManagerHome();
+                break;
+              default:
+                homePage = const UserHome();
+            }
           }
           Navigator.pushReplacement(
             context,

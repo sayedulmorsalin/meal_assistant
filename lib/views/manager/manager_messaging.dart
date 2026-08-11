@@ -64,15 +64,38 @@ class _ManagerMessagingState extends State<ManagerMessaging> {
     _messageController.clear();
   }
 
-  Future<void> _pickImage() async {
-    // Placeholder for image selection and upload
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Image upload not implemented yet.")));
+  final ImagePicker _picker = ImagePicker();
+
+  Future<void> _sendImage(ImageSource source) async {
+    if (_user == null || _user!.messId == null) return;
+    try {
+      final XFile? pickedFile = await _picker.pickImage(source: source, imageQuality: 70);
+      if (pickedFile == null) return;
+
+      setState(() => _isLoading = true);
+      String imageUrl = await _dbService.uploadChatImage(File(pickedFile.path), _user!.messId!);
+
+      final message = MessageModel(
+        id: FirebaseFirestore.instance.collection('messes').doc().id,
+        senderId: _user!.uid,
+        senderName: _user!.name,
+        text: '',
+        imageUrl: imageUrl,
+        timestamp: DateTime.now(),
+      );
+
+      await _dbService.sendMessage(_user!.messId!, message);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to send image: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
-  Future<void> _takePhoto() async {
-    // Placeholder for camera capture and upload
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Camera capture not implemented yet.")));
-  }
+  Future<void> _pickImage() async => _sendImage(ImageSource.gallery);
+  Future<void> _takePhoto() async => _sendImage(ImageSource.camera);
 
   @override
   Widget build(BuildContext context) {

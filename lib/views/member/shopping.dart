@@ -57,7 +57,7 @@ class _ShoppingState extends State<Shopping> {
               final record = records[index];
               final date = (record['date'] as Timestamp).toDate();
               final items = (record['items'] as List);
-              final total = items.fold(0.0, (sum, item) => sum + ((item['price'] as num).toDouble() * (item['quantity'] as num).toInt()));
+              final total = items.fold(0.0, (totalSum, item) => totalSum + ((item['price'] as num).toDouble() * (item['quantity'] as num).toInt()));
 
               return Card(
                 elevation: 3,
@@ -118,7 +118,7 @@ class _ShoppingState extends State<Shopping> {
                               ),
                               Padding(
                                 padding: const EdgeInsets.all(8),
-                                child: Text('₹${(item['price'] * item['quantity']).toStringAsFixed(2)}', textAlign: TextAlign.right),
+                                child: Text('৳${(item['price'] * item['quantity']).toStringAsFixed(2)}', textAlign: TextAlign.right),
                               ),
                             ],
                           )),
@@ -129,7 +129,7 @@ class _ShoppingState extends State<Shopping> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text('Grand Total:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                          Text('₹${total.toStringAsFixed(2)}', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.success)),
+                          Text('৳${total.toStringAsFixed(2)}', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.success)),
                         ],
                       ),
                     ],

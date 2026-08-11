@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/message_model.dart';
 import '../../models/user_model.dart';
@@ -61,6 +63,39 @@ class _MassegingState extends State<Masseging> {
     await _dbService.sendMessage(_user!.messId!, message);
     _messageController.clear();
   }
+
+  final ImagePicker _picker = ImagePicker();
+
+  Future<void> _sendImage(ImageSource source) async {
+    if (_user == null || _user!.messId == null) return;
+    try {
+      final XFile? pickedFile = await _picker.pickImage(source: source, imageQuality: 70);
+      if (pickedFile == null) return;
+
+      setState(() => _isLoading = true);
+      String imageUrl = await _dbService.uploadChatImage(File(pickedFile.path), _user!.messId!);
+
+      final message = MessageModel(
+        id: FirebaseFirestore.instance.collection('messes').doc().id,
+        senderId: _user!.uid,
+        senderName: _user!.name,
+        text: '',
+        imageUrl: imageUrl,
+        timestamp: DateTime.now(),
+      );
+
+      await _dbService.sendMessage(_user!.messId!, message);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to send image: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _pickImage() async => _sendImage(ImageSource.gallery);
+  Future<void> _takePhoto() async => _sendImage(ImageSource.camera);
 
   @override
   Widget build(BuildContext context) {
@@ -136,12 +171,23 @@ class _MassegingState extends State<Masseging> {
                       ),
                     ),
                   ),
-                Text(
-                  message.text,
-                  style: TextStyle(
-                    color: isMe ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface,
+                if (message.imageUrl != null)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10.0),
+                    child: Image.network(
+                      message.imageUrl!,
+                      width: 200,
+                      height: 200,
+                      fit: BoxFit.cover,
+                    ),
+                  )
+                else
+                  Text(
+                    message.text,
+                    style: TextStyle(
+                      color: isMe ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface,
+                    ),
                   ),
-                ),
                 const SizedBox(height: 4),
                 Text(
                   '${message.timestamp.hour}:${message.timestamp.minute.toString().padLeft(2, '0')}',
@@ -176,11 +222,11 @@ class _MassegingState extends State<Masseging> {
         children: [
           IconButton(
             icon: Icon(Icons.camera_alt, color: Theme.of(context).colorScheme.outline),
-            onPressed: () {},
+            onPressed: _takePhoto,
           ),
           IconButton(
             icon: Icon(Icons.image, color: Theme.of(context).colorScheme.outline),
-            onPressed: () {},
+            onPressed: _pickImage,
           ),
           Expanded(
             child: TextField(

@@ -319,7 +319,7 @@ class _AdminHomeState extends State<AdminHome> {
                 }
               },
             ),
-            if (!isSuperAdmin)
+            if (member.uid != _admin?.uid)
               IconButton(
                 icon: const Icon(Icons.person_remove, color: AppColors.error),
                 onPressed: () => _confirmRemove(member),

@@ -225,13 +225,13 @@ class _AddShoppingState extends State<AddShopping> {
                     final record = records[index];
                     final date = (record['date'] as Timestamp).toDate();
                     final items = (record['items'] as List);
-                    double total = items.fold(0.0, (sum, item) => sum + ((item['price'] as num).toDouble() * (item['quantity'] as num).toInt()));
+                    double total = items.fold(0.0, (totalSum, item) => totalSum + ((item['price'] as num).toDouble() * (item['quantity'] as num).toInt()));
 
                     return Card(
                       margin: const EdgeInsets.all(8),
                       child: ExpansionTile(
                         title: Text(DateFormat('yyyy-MM-dd').format(date)),
-                        subtitle: Text('Total: ₹${total.toStringAsFixed(2)}'),
+                        subtitle: Text('Total: ৳${total.toStringAsFixed(2)}'),
                         children: [
                           DataTable(
                             columns: const [
@@ -244,7 +244,7 @@ class _AddShoppingState extends State<AddShopping> {
                                 cells: [
                                   DataCell(Text(item['productName'])),
                                   DataCell(Text(item['quantity'].toString())),
-                                  DataCell(Text('₹${(item['price'] * item['quantity']).toStringAsFixed(2)}')),
+                                  DataCell(Text('৳${(item['price'] * item['quantity']).toStringAsFixed(2)}')),
                                 ],
                               );
                             }).toList(),

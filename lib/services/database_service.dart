@@ -1,4 +1,7 @@
+import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:mess_management/models/join_request_model.dart';
 import 'dart:math';
 import 'package:mess_management/models/user_model.dart';
@@ -31,9 +34,37 @@ class DatabaseService {
       'role': UserRole.superAdmin.toString().split('.').last,
       'participationRole': UserRole.member.toString().split('.').last,
       'messId': messId,
+      'createdAt': FieldValue.serverTimestamp(),
     });
 
+    await initializeDefaultMealsForUser(superAdminId, messId, DateTime.now());
+
     return joinKey;
+  }
+
+  // Initialize Default Meals for user from join day to month end in Firestore
+  Future<void> initializeDefaultMealsForUser(String userId, String messId, DateTime joinDate) async {
+    WriteBatch batch = _db.batch();
+    int daysInMonth = DateUtils.getDaysInMonth(joinDate.year, joinDate.month);
+    
+    for (int day = joinDate.day; day <= daysInMonth; day++) {
+      DateTime date = DateTime(joinDate.year, joinDate.month, day);
+      String docId = "${messId}_${userId}_${date.year}_${date.month}_$day";
+      DocumentReference ref = _db.collection('meals').doc(docId);
+      batch.set(ref, {
+        'id': docId,
+        'userId': userId,
+        'messId': messId,
+        'date': Timestamp.fromDate(date),
+        'breakfast': false,
+        'lunch': true,
+        'dinner': true,
+        'guestBreakfast': 0,
+        'guestLunch': 0,
+        'guestDinner': 0,
+      }, SetOptions(merge: true));
+    }
+    await batch.commit();
   }
 
   // Send Join Request
@@ -87,10 +118,14 @@ class DatabaseService {
     // Update request status
     await _db.collection('join_requests').doc(request.id).update({'status': 'accepted'});
 
-    // Set messId for the user
+    // Set messId and createdAt for the user
     await _db.collection('users').doc(request.userId).update({
       'messId': request.messId,
+      'createdAt': FieldValue.serverTimestamp(),
     });
+
+    // Initialize default meals in Firestore for user from join day to month end
+    await initializeDefaultMealsForUser(request.userId, request.messId, DateTime.now());
   }
 
   // Reject Join Request
@@ -112,6 +147,24 @@ class DatabaseService {
     }
   }
 
+  // Leave Mess
+  Future<void> leaveMess(String userId, String messId) async {
+    await _db.collection('users').doc(userId).update({
+      'messId': null,
+      'role': UserRole.member.toString().split('.').last,
+      'participationRole': null,
+      'deposit': 0.0,
+    });
+    
+    // Also remove from mess managerId if they were the manager
+    var messDoc = await _db.collection('messes').doc(messId).get();
+    if (messDoc.exists && messDoc.data()?['managerId'] == userId) {
+      await _db.collection('messes').doc(messId).update({'managerId': null});
+    }
+
+    await addLog(messId, userId, "User left the mess.");
+  }
+
   // Update Meal Status
   Future<void> updateMealStatus(MealModel mealModel) async {
     await _db.collection('meals').doc(mealModel.id).set(mealModel.toMap(), SetOptions(merge: true));
@@ -126,15 +179,45 @@ class DatabaseService {
       .map((snapshot) => snapshot.docs.map((doc) => LogModel.fromMap(doc.data())).toList());
   }
 
-  // Assign Manager
+  // Assign Manager (and demote old manager back to member)
   Future<void> assignManager(String messId, String managerId) async {
+    // Find existing manager and demote them
+    final messDoc = await _db.collection('messes').doc(messId).get();
+    final oldManagerId = messDoc.data()?['managerId'] as String?;
+    if (oldManagerId != null && oldManagerId != managerId) {
+      await _db.collection('users').doc(oldManagerId).update({
+        'role': UserRole.member.toString().split('.').last,
+      });
+    }
+
     await _db.collection('messes').doc(messId).update({
       'managerId': managerId,
     });
-    
+
     await _db.collection('users').doc(managerId).update({
       'role': UserRole.manager.toString().split('.').last,
     });
+  }
+
+  // Update Mess Financials (meal rate, total deposit)
+  Future<void> updateMessFinancials(String messId, {double? mealRate, double? totalDeposit}) async {
+    final Map<String, dynamic> updates = {};
+    if (mealRate != null) updates['mealRate'] = mealRate;
+    if (totalDeposit != null) updates['totalDeposit'] = totalDeposit;
+    if (updates.isNotEmpty) {
+      await _db.collection('messes').doc(messId).update(updates);
+    }
+  }
+
+  // Add Member Deposit — increments totalDeposit in the mess doc, updates user deposit, and logs
+  Future<void> addMemberDeposit(String messId, String userId, String userName, double amount) async {
+    await _db.collection('messes').doc(messId).update({
+      'totalDeposit': FieldValue.increment(amount),
+    });
+    await _db.collection('users').doc(userId).update({
+      'deposit': FieldValue.increment(amount),
+    });
+    await addLog(messId, userId, "Deposit added: ৳${amount.toStringAsFixed(2)} for $userName");
   }
 
   // Get Mess Details
@@ -164,12 +247,13 @@ class DatabaseService {
   }
 
   // Get User Meals for a specific month
-  Stream<List<MealModel>> getUserMonthlyMeals(String userId, int year, int month) {
+  Stream<List<MealModel>> getUserMonthlyMeals(String userId, String messId, int year, int month) {
     DateTime startOfMonth = DateTime(year, month, 1);
     DateTime endOfMonth = DateTime(year, month + 1, 0).add(const Duration(days: 1)); // End of month
 
     return _db.collection('meals')
       .where('userId', isEqualTo: userId)
+      .where('messId', isEqualTo: messId)
       .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfMonth))
       .where('date', isLessThan: Timestamp.fromDate(endOfMonth))
       .snapshots()
@@ -177,14 +261,23 @@ class DatabaseService {
   }
 
   // Create Meal Request
-  Future<void> createMealRequest(String userId, String messId, DateTime date, Map<String, bool> mealsRequested) async {
+  Future<void> createMealRequest(
+    String userId, 
+    String userName, 
+    String messId, 
+    DateTime date, 
+    Map<String, bool> mealsRequested,
+    {Map<String, int>? guestMealsRequested}
+  ) async {
     String requestId = _db.collection('requests').doc().id;
     RequestModel request = RequestModel(
       id: requestId,
       userId: userId,
+      userName: userName,
       messId: messId,
       date: date,
       mealsRequested: mealsRequested,
+      guestMealsRequested: guestMealsRequested,
       status: RequestStatus.pending,
       timestamp: DateTime.now(),
     );
@@ -200,10 +293,23 @@ class DatabaseService {
       .map((snapshot) => snapshot.docs.map((doc) => RequestModel.fromMap(doc.data())).toList());
   }
 
+  // Get All Requests (Audit History for all members)
+  Stream<List<RequestModel>> getAllMealRequests(String messId) {
+    return _db.collection('requests')
+      .where('messId', isEqualTo: messId)
+      .snapshots()
+      .map((snapshot) {
+        List<RequestModel> list = snapshot.docs.map((doc) => RequestModel.fromMap(doc.data())).toList();
+        list.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+        return list;
+      });
+  }
+
   // Get User Pending Requests
-  Stream<List<RequestModel>> getUserPendingRequests(String userId) {
+  Stream<List<RequestModel>> getUserPendingRequests(String userId, String messId) {
     return _db.collection('requests')
       .where('userId', isEqualTo: userId)
+      .where('messId', isEqualTo: messId)
       .where('status', isEqualTo: 'pending')
       .snapshots()
       .map((snapshot) => snapshot.docs.map((doc) => RequestModel.fromMap(doc.data())).toList());
@@ -232,8 +338,8 @@ class DatabaseService {
       'items': items,
     });
     
-    double total = items.fold(0.0, (sum, item) => sum + ((item['price'] as num).toDouble() * (item['quantity'] as num).toInt()));
-    await addLog(messId, "manager", "Manager added shopping record for ${date.day}/${date.month}: ₹$total");
+    double total = items.fold(0.0, (totalSum, item) => totalSum + ((item['price'] as num).toDouble() * (item['quantity'] as num).toInt()));
+    await addLog(messId, "manager", "Manager added shopping record for ${date.day}/${date.month}: ৳$total");
   }
 
   // Get Shopping History
@@ -243,6 +349,28 @@ class DatabaseService {
       .orderBy('date', descending: true)
       .snapshots()
       .map((snapshot) => snapshot.docs.map((doc) => doc.data()).toList());
+  }
+
+  // Get Monthly Shopping Total
+  Stream<double> getMonthlyShoppingTotal(String messId, int year, int month) {
+    DateTime startOfMonth = DateTime(year, month, 1);
+    DateTime endOfMonth = DateTime(year, month + 1, 0).add(const Duration(days: 1));
+
+    return _db.collection('shopping')
+      .where('messId', isEqualTo: messId)
+      .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfMonth))
+      .where('date', isLessThan: Timestamp.fromDate(endOfMonth))
+      .snapshots()
+      .map((snapshot) {
+        double total = 0.0;
+        for (var doc in snapshot.docs) {
+          final items = (doc.data()['items'] as List? ?? []);
+          for (var item in items) {
+            total += ((item['price'] as num).toDouble() * (item['quantity'] as num).toInt());
+          }
+        }
+        return total;
+      });
   }
 
   // Approve Request
@@ -271,13 +399,20 @@ class DatabaseService {
         mealId = _db.collection('meals').doc().id;
       }
 
-      await _db.collection('meals').doc(mealId).set({
+      Map<String, dynamic> mealData = {
         'id': mealId,
         'userId': request.userId,
         'messId': request.messId,
         'date': Timestamp.fromDate(request.date),
         ...request.mealsRequested,
-      }, SetOptions(merge: true));
+      };
+      if (request.guestMealsRequested != null) {
+        mealData['guestBreakfast'] = request.guestMealsRequested!['breakfast'] ?? 0;
+        mealData['guestLunch'] = request.guestMealsRequested!['lunch'] ?? 0;
+        mealData['guestDinner'] = request.guestMealsRequested!['dinner'] ?? 0;
+      }
+
+      await _db.collection('meals').doc(mealId).set(mealData, SetOptions(merge: true));
 
       // Add log
       await addLog(request.messId, request.userId, "Manager approved meal request for ${request.date.day}/${request.date.month}");
@@ -334,5 +469,19 @@ class DatabaseService {
         .collection('meal_plan')
         .snapshots()
         .map((snapshot) => snapshot.docs.map((doc) => MealPlanModel.fromMap(doc.data())).toList());
+  }
+
+  // Firebase Storage Uploads
+  Future<String> uploadProfileImage(File imageFile, String userId) async {
+    final ref = FirebaseStorage.instance.ref().child('profile_images').child('$userId.jpg');
+    await ref.putFile(imageFile);
+    return await ref.getDownloadURL();
+  }
+
+  Future<String> uploadChatImage(File imageFile, String messId) async {
+    final fileName = DateTime.now().millisecondsSinceEpoch.toString();
+    final ref = FirebaseStorage.instance.ref().child('chat_images').child(messId).child('$fileName.jpg');
+    await ref.putFile(imageFile);
+    return await ref.getDownloadURL();
   }
 }

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:mess_management/views/member/user_home.dart';
 import 'package:mess_management/services/auth_service.dart';
 import 'package:mess_management/services/database_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';

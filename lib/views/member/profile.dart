@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:mess_management/services/auth_service.dart';
+import 'package:mess_management/services/database_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:mess_management/models/user_model.dart';
 import '../settings/settings_page.dart';
@@ -63,13 +64,40 @@ class _ProfileState extends State<Profile> {
   }
 
   Future<void> _getImage(ImageSource source) async {
-    final XFile? pickedImage = await _picker.pickImage(source: source);
-    if (pickedImage != null) {
-      setState(() {
-        _profileImage = File(pickedImage.path);
-      });
-    }
     Navigator.pop(context);
+    final XFile? pickedImage = await _picker.pickImage(source: source, imageQuality: 70);
+    if (pickedImage != null && _user != null) {
+      File file = File(pickedImage.path);
+      setState(() {
+        _profileImage = file;
+        _isLoading = true;
+      });
+      try {
+        String url = await DatabaseService().uploadProfileImage(file, _user!.uid);
+        await FirebaseFirestore.instance.collection('users').doc(_user!.uid).update({
+          'profileImage': url,
+        });
+        setState(() {
+          _user = UserModel(
+            uid: _user!.uid,
+            name: _user!.name,
+            email: _user!.email,
+            role: _user!.role,
+            participationRole: _user!.participationRole,
+            messId: _user!.messId,
+            profileImage: url,
+            status: _user!.status,
+            deposit: _user!.deposit,
+          );
+        });
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Failed to upload profile image: $e")));
+        }
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
+    }
   }
 
   void _showEditDialog(String title, TextEditingController controller) {
@@ -130,11 +158,18 @@ class _ProfileState extends State<Profile> {
               onTap: _showImagePicker,
               child: CircleAvatar(
                 radius: 60,
+                backgroundColor: Theme.of(context).colorScheme.primaryContainer,
                 backgroundImage: _profileImage != null
-                    ? FileImage(_profileImage!)
-                    : const AssetImage('assets/images/profile.jpg') as ImageProvider,
-                child: _profileImage == null
-                    ? const Icon(Icons.camera_alt, size: 40, color: Colors.white)
+                    ? FileImage(_profileImage!) as ImageProvider
+                    : (_user?.profileImage != null && _user!.profileImage!.isNotEmpty
+                        ? NetworkImage(_user!.profileImage!)
+                        : null),
+                child: (_profileImage == null && (_user?.profileImage == null || _user!.profileImage!.isEmpty))
+                    ? Icon(
+                        Icons.person,
+                        size: 60,
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      )
                     : null,
               ),
             ),
@@ -156,15 +191,52 @@ class _ProfileState extends State<Profile> {
             ProfileActionTile(
               icon: Icons.help_outline,
               title: 'Help & Support',
-              onTap: () {/* Add support functionality */},
+              onTap: _showHelpSupportDialog,
             ),
             ProfileActionTile(
               icon: Icons.info_outline,
               title: 'About',
-              onTap: () {/* Add about functionality */},
+              onTap: _showAboutDialog,
+            ),
+            const Divider(),
+            ProfileActionTile(
+              icon: Icons.exit_to_app,
+              title: 'Leave Mess',
+              onTap: _confirmLeaveMess,
+              isDestructive: true,
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _confirmLeaveMess() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Leave Mess?'),
+        content: const Text(
+          'Are you sure you want to leave this mess? You will no longer see data from this mess, and your current deposit will be reset.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: Navigator.of(context).pop,
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              if (_user?.messId != null) {
+                await DatabaseService().leaveMess(_user!.uid, _user!.messId!);
+                if (mounted) {
+                  Navigator.of(context).pop(); // Close dialog
+                  Navigator.of(context).popUntil((route) => route.isFirst); // Go back to AuthWrapper
+                }
+              }
+            },
+            child: const Text('Leave', style: TextStyle(color: Colors.red)),
+          ),
+        ],
       ),
     );
   }
@@ -190,6 +262,48 @@ class _ProfileState extends State<Profile> {
             },
             child: const Text('Logout'),
           ),
+        ],
+      ),
+    );
+  }
+
+  void _showHelpSupportDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Help & Support'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('• For mess management queries, contact your Mess Manager.'),
+            SizedBox(height: 8),
+            Text('• For technical support, reach out to support@mealassistant.app'),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK')),
+        ],
+      ),
+    );
+  }
+
+  void _showAboutDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('About Meal Assistant'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Meal Assistant v1.0.0'),
+            SizedBox(height: 8),
+            Text('Comprehensive mess management system for automated meal tracking, deposit management, shopping records, and real-time group chat.'),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
         ],
       ),
     );
@@ -223,19 +337,32 @@ class ProfileActionTile extends StatelessWidget {
   final IconData icon;
   final String title;
   final VoidCallback onTap;
+  final bool isDestructive;
 
   const ProfileActionTile({
     super.key,
     required this.icon,
     required this.title,
     required this.onTap,
+    this.isDestructive = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      leading: Icon(icon, size: 30, color: Theme.of(context).colorScheme.primary),
-      title: Text(title, style: const TextStyle(fontSize: 16)),
+      leading: Icon(
+        icon,
+        size: 30,
+        color: isDestructive ? Colors.red : Theme.of(context).colorScheme.primary,
+      ),
+      title: Text(
+        title,
+        style: TextStyle(
+          fontSize: 16,
+          color: isDestructive ? Colors.red : null,
+          fontWeight: isDestructive ? FontWeight.bold : null,
+        ),
+      ),
       trailing: const Icon(Icons.arrow_forward_ios, size: 18),
       onTap: onTap,
     );
