@@ -1,6 +1,9 @@
-- [ ] Add dependencies (`provider`, `shared_preferences`) to `pubspec.yaml`
-- [ ] Create `ThemeProvider` in `lib/core/theme_provider.dart`
-- [ ] Initialize `ThemeProvider` in `lib/main.dart` and configure `MaterialApp`
-- [ ] Create `SettingsPage` in `lib/views/settings/settings_page.dart`
-- [ ] Update `Profile` in `lib/views/member/profile.dart` to link to the new `SettingsPage`
-- [ ] Verify theme switching functionality
+- [ ] Create `MessageModel` and `MealPlanModel`
+- [ ] Implement Chat logic in `DatabaseService`
+- [ ] Implement Meal Planning logic in `DatabaseService`
+- [ ] Fully implement `lib/views/manager/manager_messaging.dart`
+- [ ] Fully implement `lib/views/member/masseging.dart`
+- [ ] Fully implement `lib/views/manager/add_meal_planning.dart`
+- [ ] Fully implement `lib/views/member/meal_planning.dart`
+- [ ] Fix `lib/views/manager/history_admin.dart` to use real data
+- [ ] Verify all functionalities

@@ -4,6 +4,7 @@ import 'package:mess_management/models/meal_model.dart';
 import 'package:mess_management/models/user_model.dart';
 import 'package:mess_management/services/auth_service.dart';
 import 'package:mess_management/services/database_service.dart';
+import '../../core/app_colors.dart';
 
 class History extends StatefulWidget {
   const History({super.key});
@@ -19,8 +20,9 @@ class _HistoryState extends State<History> {
   final Map<int, MealModel?> _monthlyMeals = {};
   UserModel? _user;
   final DateTime _today = DateTime.now();
-  final double _totalDeposit = 5000.0;
-  final double _mealRate = 50.0;
+  double _totalDeposit = 5000.0;
+  double _mealRate = 50.0;
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -43,6 +45,17 @@ class _HistoryState extends State<History> {
 
   void _listenToMeals() {
     if (_user == null || _user!.messId == null) return;
+    String messId = _user!.messId!;
+
+    FirebaseFirestore.instance.collection('messes').doc(messId).snapshots().listen((doc) {
+      if (doc.exists && mounted) {
+        setState(() {
+          _totalDeposit = (doc.data()?['totalDeposit'] ?? 5000.0).toDouble();
+          _mealRate = (doc.data()?['mealRate'] ?? 50.0).toDouble();
+        });
+      }
+    });
+
     _dbService.getUserMonthlyMeals(_user!.uid, _today.year, _today.month).listen((meals) {
       if (mounted) {
         setState(() {
@@ -50,6 +63,7 @@ class _HistoryState extends State<History> {
           for (var meal in meals) {
             _monthlyMeals[meal.date.day] = meal;
           }
+          _isLoading = false;
         });
       }
     });
@@ -71,15 +85,15 @@ class _HistoryState extends State<History> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Meal History'),
         centerTitle: true,
       ),
       body: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-        ),
+        color: Theme.of(context).colorScheme.surface,
         child: Column(
           children: [
             Expanded(
@@ -102,12 +116,12 @@ class _HistoryState extends State<History> {
                       child: Container(
                         decoration: BoxDecoration(
                           color: isToday
-                              ? Colors.blue.withOpacity(0.2)
-                              : Colors.grey[100],
+                              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
+                              : Theme.of(context).colorScheme.surface,
                           borderRadius: BorderRadius.circular(8.0),
                           border: isToday
-                              ? Border.all(color: Colors.blue, width: 2)
-                              : null,
+                              ? Border.all(color: Theme.of(context).colorScheme.primary, width: 2)
+                              : Border.all(color: Theme.of(context).colorScheme.outlineVariant),
                         ),
                         child: Padding(
                           padding: const EdgeInsets.only(left: 8.0),
@@ -120,7 +134,7 @@ class _HistoryState extends State<History> {
                                 Text(
                                   "$day",
                                   style: TextStyle(
-                                    color: isToday ? Colors.blue : Colors.black,
+                                    color: isToday ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface,
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -134,7 +148,7 @@ class _HistoryState extends State<History> {
                                           "L:${_monthlyMeals[day]!.lunch ? '1' : '0'}${_monthlyMeals[day]!.guestLunch != 0 ? '(+${_monthlyMeals[day]!.guestLunch})' : ''}\n"
                                           "D:${_monthlyMeals[day]!.dinner ? '1' : '0'}${_monthlyMeals[day]!.guestDinner != 0 ? '(+${_monthlyMeals[day]!.guestDinner})' : ''}",
                                     style: TextStyle(
-                                      color: isToday ? Colors.blue : Colors.grey[800],
+                                      color: isToday ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant,
                                       fontSize: 12,
                                       fontWeight: FontWeight.bold,
                                       height: 1.0,
@@ -157,11 +171,11 @@ class _HistoryState extends State<History> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: Theme.of(context).colorScheme.surface,
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black12,
+                    color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.1),
                     blurRadius: 10,
                     spreadRadius: 2,
                   ),
@@ -173,9 +187,9 @@ class _HistoryState extends State<History> {
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
                       _buildStatCard("Total Deposit",
-                          "৳${_totalDeposit.toStringAsFixed(2)}", Colors.green),
+                          "৳${_totalDeposit.toStringAsFixed(2)}", AppColors.success),
                       _buildStatCard("Available Balance",
-                          "৳${_availableBalance.toStringAsFixed(2)}", Colors.blue),
+                          "৳${_availableBalance.toStringAsFixed(2)}", Theme.of(context).colorScheme.primary),
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -183,9 +197,9 @@ class _HistoryState extends State<History> {
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
                       _buildStatCard("Meal Rate",
-                          "৳${_mealRate.toStringAsFixed(2)}", Colors.orange),
+                          "৳${_mealRate.toStringAsFixed(2)}", AppColors.warning),
                       _buildStatCard(
-                          "Total Meals", _totalMeals.toString(), Colors.purple),
+                          "Total Meals", _totalMeals.toString(), AppColors.info),
                     ],
                   ),
                 ],
@@ -200,7 +214,7 @@ class _HistoryState extends State<History> {
   Widget _buildStatCard(String title, String value, Color color) {
     return Expanded(
       child: Card(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         elevation: 2,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
@@ -214,7 +228,7 @@ class _HistoryState extends State<History> {
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
-                  color: Colors.grey[700],
+                  color: Theme.of(context).colorScheme.outline,
                 ),
               ),
               const SizedBox(height: 6),

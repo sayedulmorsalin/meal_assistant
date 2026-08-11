@@ -4,6 +4,7 @@ import 'package:mess_management/services/database_service.dart';
 import 'package:mess_management/services/auth_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:mess_management/models/user_model.dart';
+import '../../core/app_colors.dart';
 
 class Shopping extends StatefulWidget {
   const Shopping({super.key});
@@ -68,10 +69,10 @@ class _ShoppingState extends State<Shopping> {
                     children: [
                       Text(
                         DateFormat('MMMM dd, yyyy').format(date),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: Colors.blue,
+                          color: Theme.of(context).colorScheme.primary,
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -82,26 +83,26 @@ class _ShoppingState extends State<Shopping> {
                           2: FlexColumnWidth(1.5),
                         },
                         border: TableBorder.all(
-                          color: Colors.grey[300]!,
+                          color: Theme.of(context).colorScheme.outlineVariant,
                           width: 1,
                         ),
                         children: [
-                          const TableRow(
+                          TableRow(
                             decoration: BoxDecoration(
-                              color: Colors.blueGrey,
+                              color: Theme.of(context).colorScheme.primaryContainer,
                             ),
                             children: [
                               Padding(
-                                padding: EdgeInsets.all(8),
-                                child: Text('Item', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                                padding: const EdgeInsets.all(8),
+                                child: Text('Item', style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onPrimaryContainer)),
                               ),
                               Padding(
-                                padding: EdgeInsets.all(8),
-                                child: Text('Qty', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white), textAlign: TextAlign.center),
+                                padding: const EdgeInsets.all(8),
+                                child: Text('Qty', style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onPrimaryContainer), textAlign: TextAlign.center),
                               ),
                               Padding(
-                                padding: EdgeInsets.all(8),
-                                child: Text('Total', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white), textAlign: TextAlign.right),
+                                padding: const EdgeInsets.all(8),
+                                child: Text('Total', style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onPrimaryContainer), textAlign: TextAlign.right),
                               ),
                             ],
                           ),
@@ -128,7 +129,7 @@ class _ShoppingState extends State<Shopping> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text('Grand Total:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                          Text('₹${total.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.green)),
+                          Text('₹${total.toStringAsFixed(2)}', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.success)),
                         ],
                       ),
                     ],

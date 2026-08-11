@@ -10,7 +10,7 @@ class AuthService {
   String? get currentUid => _auth.currentUser?.uid;
 
   // Sign Up
-  Future<UserCredential?> signUp(String email, String password, String name) async {
+  Future<String?> signUp(String email, String password, String name) async {
     try {
       UserCredential result = await _auth.createUserWithEmailAndPassword(
         email: email,
@@ -29,20 +29,36 @@ class AuthService {
         );
         await _db.collection('users').doc(user.uid).set(newUser.toMap());
       }
-      return result;
+      return null; // Success
+    } on FirebaseAuthException catch (e) {
+      return e.message ?? "An unknown error occurred during sign up.";
     } catch (e) {
-      print(e.toString());
-      return null;
+      return e.toString();
     }
   }
 
   // Login
-  Future<UserCredential?> login(String email, String password) async {
+  Future<String?> login(String email, String password) async {
     try {
-      return await _auth.signInWithEmailAndPassword(email: email, password: password);
+      await _auth.signInWithEmailAndPassword(email: email, password: password);
+      return null; // Success
+    } on FirebaseAuthException catch (e) {
+      switch (e.code) {
+        case 'user-not-found':
+          return 'No user found with this email.';
+        case 'wrong-password':
+          return 'Incorrect password.';
+        case 'invalid-email':
+          return 'The email address is badly formatted.';
+        case 'user-disabled':
+          return 'This user has been disabled.';
+        case 'invalid-credential':
+          return 'Invalid email or password.';
+        default:
+          return e.message ?? "An error occurred during login.";
+      }
     } catch (e) {
-      print(e.toString());
-      return null;
+      return e.toString();
     }
   }
 

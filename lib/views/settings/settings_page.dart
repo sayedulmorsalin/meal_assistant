@@ -8,6 +8,7 @@ class SettingsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
+    final primaryColor = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
       appBar: AppBar(
@@ -16,14 +17,14 @@ class SettingsPage extends StatelessWidget {
       ),
       body: ListView(
         children: [
-          const Padding(
-            padding: EdgeInsets.all(16.0),
+          Padding(
+            padding: const EdgeInsets.all(16.0),
             child: Text(
               'Appearance',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: Colors.blue,
+                color: primaryColor,
               ),
             ),
           ),
@@ -54,7 +55,7 @@ class SettingsPage extends StatelessWidget {
               if (value != null) themeProvider.setThemeMode(value);
             },
           ),
-          const Divider(),
+          Divider(),
           // Add more settings here if needed
         ],
       ),

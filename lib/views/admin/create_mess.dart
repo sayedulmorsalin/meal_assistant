@@ -67,60 +67,33 @@ class _CreateMessState extends State<CreateMess> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.black87,
-        title: const Text(
-          "Create New Meal System",
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 30,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        title: const Text("Create New Meal System"),
       ),
       body: Container(
-        decoration: const BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage("assets/images/create meal.jpg"),
-            fit: BoxFit.cover,
-          ),
-        ),
+        color: Theme.of(context).colorScheme.surface,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 100),
-              const Text(
-                "  Meal Name",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 25.0,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.only(left: 20.0),
-                decoration: getTextFieldDecoration(),
-                child: TextField(
-                  controller: _messNameController,
-                  decoration: const InputDecoration(
-                    border: InputBorder.none,
-                    hintText: "Enter Mess Name",
-                    hintStyle: TextStyle(color: Colors.white54),
-                  ),
-                  style: const TextStyle(color: Colors.white),
+              const SizedBox(height: 80),
+              TextField(
+                controller: _messNameController,
+                decoration: const InputDecoration(
+                  labelText: "Meal Name",
+                  hintText: "Enter Mess Name",
+                  prefixIcon: Icon(Icons.restaurant_menu),
                 ),
               ),
               const SizedBox(height: 50.0),
               Center(
                 child: _isLoading 
-                ? const CircularProgressIndicator(color: Colors.white)
+                ? const CircularProgressIndicator()
                 : ElevatedButton(
                   onPressed: _handleCreate,
                   child: const Text(
                     "Create",
                     style: TextStyle(
-                      color: Colors.black,
                       fontSize: 20.0,
                       fontWeight: FontWeight.bold,
                     ),
@@ -134,14 +107,4 @@ class _CreateMessState extends State<CreateMess> {
     );
   }
 
-  BoxDecoration getTextFieldDecoration() {
-    return BoxDecoration(
-      color: Colors.black45,
-      border: Border.all(
-        width: 4,
-        color: Colors.white,
-      ),
-      borderRadius: BorderRadius.circular(30),
-    );
-  }
 }

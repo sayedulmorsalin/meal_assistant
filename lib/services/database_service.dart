@@ -1,10 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:mess_management/models/join_request_model.dart';
 import 'dart:math';
 import 'package:mess_management/models/user_model.dart';
 import 'package:mess_management/models/mess_model.dart';
 import 'package:mess_management/models/meal_model.dart';
 import 'package:mess_management/models/log_model.dart';
 import 'package:mess_management/models/request_model.dart';
+import 'package:mess_management/models/message_model.dart';
+import 'package:mess_management/models/meal_plan_model.dart';
 
 class DatabaseService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -23,27 +26,90 @@ class DatabaseService {
 
     await _db.collection('messes').doc(messId).set(newMess.toMap());
 
-    // Update user role to superAdmin and set messId
+    // Update user role to superAdmin and set messId and participationRole
     await _db.collection('users').doc(superAdminId).update({
       'role': UserRole.superAdmin.toString().split('.').last,
+      'participationRole': UserRole.member.toString().split('.').last,
       'messId': messId,
     });
 
     return joinKey;
   }
 
-  // Join Mess
-  Future<bool> joinMess(String joinKey, String userId) async {
-    var messQuery = await _db.collection('messes').where('joinKey', isEqualTo: joinKey).get();
-    
-    if (messQuery.docs.isNotEmpty) {
-      String messId = messQuery.docs.first.id;
-      await _db.collection('users').doc(userId).update({
-        'messId': messId,
-      });
-      return true;
+  // Send Join Request
+  Future<String?> sendJoinRequest(String userId, String userName, String joinKey) async {
+    try {
+      var messQuery = await _db.collection('messes').where('joinKey', isEqualTo: joinKey).get();
+      if (messQuery.docs.isEmpty) return "Invalid Join Key";
+
+      var messDoc = messQuery.docs.first;
+      String messId = messDoc.id;
+      String messName = messDoc.data()['name'] ?? 'Unknown Mess';
+
+      // Check if user is already in this mess or has a pending request
+      var existingRequest = await _db.collection('join_requests')
+          .where('userId', isEqualTo: userId)
+          .where('messId', isEqualTo: messId)
+          .where('status', isEqualTo: 'pending')
+          .get();
+      
+      if (existingRequest.docs.isNotEmpty) return "You already have a pending request for this mess.";
+
+      String requestId = _db.collection('join_requests').doc().id;
+      JoinRequestModel request = JoinRequestModel(
+        id: requestId,
+        userId: userId,
+        userName: userName,
+        messId: messId,
+        messName: messName,
+        status: JoinRequestStatus.pending,
+        timestamp: DateTime.now(),
+      );
+
+      await _db.collection('join_requests').doc(requestId).set(request.toMap());
+      return null; // Success
+    } catch (e) {
+      return e.toString();
     }
-    return false;
+  }
+
+  // Get Pending Join Requests
+  Stream<List<JoinRequestModel>> getPendingJoinRequests(String messId) {
+    return _db.collection('join_requests')
+        .where('messId', isEqualTo: messId)
+        .where('status', isEqualTo: 'pending')
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) => JoinRequestModel.fromMap(doc.data())).toList());
+  }
+
+  // Accept Join Request
+  Future<void> acceptJoinRequest(JoinRequestModel request) async {
+    // Update request status
+    await _db.collection('join_requests').doc(request.id).update({'status': 'accepted'});
+
+    // Set messId for the user
+    await _db.collection('users').doc(request.userId).update({
+      'messId': request.messId,
+    });
+  }
+
+  // Reject Join Request
+  Future<void> rejectJoinRequest(String requestId) async {
+    await _db.collection('join_requests').doc(requestId).update({'status': 'rejected'});
+  }
+
+  // Remove Member
+  Future<void> removeMember(String userId, String messId) async {
+    await _db.collection('users').doc(userId).update({
+      'messId': null,
+      'role': UserRole.member.toString().split('.').last,
+    });
+    
+    // Also remove from mess managerId if they were the manager
+    var messDoc = await _db.collection('messes').doc(messId).get();
+    if (messDoc.exists && messDoc.data()?['managerId'] == userId) {
+      await _db.collection('messes').doc(messId).update({'managerId': null});
+    }
   }
 
   // Update Meal Status
@@ -69,6 +135,11 @@ class DatabaseService {
     await _db.collection('users').doc(managerId).update({
       'role': UserRole.manager.toString().split('.').last,
     });
+  }
+
+  // Get Mess Details
+  Stream<MessModel> getMessDetails(String messId) {
+    return _db.collection('messes').doc(messId).snapshots().map((doc) => MessModel.fromMap(doc.data() as Map<String, dynamic>));
   }
 
   // Get Mess Members
@@ -229,5 +300,39 @@ class DatabaseService {
       timestamp: DateTime.now(),
     );
     await _db.collection('logs').doc(logId).set(log.toMap());
+  }
+
+  // Messaging (Chat)
+  Future<void> sendMessage(String messId, MessageModel message) async {
+    await _db.collection('messes').doc(messId).collection('messages').doc(message.id).set(message.toMap());
+  }
+
+  Stream<List<MessageModel>> getMessages(String messId) {
+    return _db.collection('messes')
+        .doc(messId)
+        .collection('messages')
+        .orderBy('timestamp', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) => MessageModel.fromMap(doc.data())).toList());
+  }
+
+  // Meal Planning
+  Future<void> updateMealPlan(String messId, List<MealPlanModel> plan) async {
+    final batch = _db.batch();
+    final planCollection = _db.collection('messes').doc(messId).collection('meal_plan');
+    
+    // Clear existing or just overwrite by day id
+    for (var dayPlan in plan) {
+      batch.set(planCollection.doc(dayPlan.day), dayPlan.toMap());
+    }
+    await batch.commit();
+  }
+
+  Stream<List<MealPlanModel>> getMealPlan(String messId) {
+    return _db.collection('messes')
+        .doc(messId)
+        .collection('meal_plan')
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) => MealPlanModel.fromMap(doc.data())).toList());
   }
 }

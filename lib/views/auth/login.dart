@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
 import 'register.dart';
-import '../member/user_home.dart';
-import '../manager/manager_home.dart';
+import '../../core/app_colors.dart';
 
 class Login extends StatefulWidget {
   const Login({super.key});
@@ -26,7 +25,7 @@ class _LoginState extends State<Login> {
     }
 
     setState(() => _isLoading = true);
-    var result = await _authService.login(
+    String? error = await _authService.login(
       _emailController.text.trim(),
       _passwordController.text.trim(),
     );
@@ -34,9 +33,12 @@ class _LoginState extends State<Login> {
     if (!mounted) return;
     setState(() => _isLoading = false);
 
-    if (result == null) {
+    if (error != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Login Failed. Please check your credentials.")),
+        SnackBar(
+          content: Text(error),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
       );
     }
     // AuthWrapper in main.dart will handle navigation automatically
@@ -46,65 +48,42 @@ class _LoginState extends State<Login> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.blue[100],
-        title: const Row(
+        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+        title: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text("Login Form",
               style: TextStyle(
-                  color: Colors.blue,
+                  color: Theme.of(context).colorScheme.primary,
                   fontSize: 24.0,
                   fontWeight: FontWeight.bold),),
           ],),),
       body: Container(
-        decoration: const BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage("assets/images/login.jpeg"),
-            fit: BoxFit.cover,
-          ),
-        ),
+        color: Colors.white,
         child: SingleChildScrollView(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 100,),
-                const Text("  Email",
-                  style: TextStyle(
-                      color: Colors.black,
-                      fontSize: 25.0,
-                      fontWeight: FontWeight.bold
-                  ),),
-                Container(
-                  padding: const EdgeInsets.only(left: 20.0),
-                  decoration: getTextFieldDecoration(),
-                  child: TextField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      hintText: "Enter your email",
-                    ),
+                const SizedBox(height: 60,),
+                TextField(
+                  controller: _emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: "Email",
+                    hintText: "Enter your email",
+                    prefixIcon: Icon(Icons.email_outlined),
                   ),
                 ),
-                const SizedBox(height: 30.0,),
-                const Text("  Password",
-                  style: TextStyle(
-                      color: Colors.black,
-                      fontSize: 25.0,
-                      fontWeight: FontWeight.bold
-                  ),),
-                Container(
-                  padding: const EdgeInsets.only(left: 20.0),
-                  decoration: getTextFieldDecoration(),
-                  child: TextField(
-                    controller: _passwordController,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      hintText: "Enter your password",
-                    ),
+                const SizedBox(height: 24.0,),
+                TextField(
+                  controller: _passwordController,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: "Password",
+                    hintText: "Enter your password",
+                    prefixIcon: Icon(Icons.lock_outline),
                   ),
                 ),
                 const SizedBox(height: 30.0),
@@ -116,8 +95,8 @@ class _LoginState extends State<Login> {
                         : ElevatedButton(
                             onPressed: _login,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.orange,
-                              foregroundColor: Colors.white,
+                              backgroundColor: AppColors.warning,
+                              foregroundColor: Theme.of(context).colorScheme.onPrimary,
                               padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 15),
                             ),
                             child: const Text("Submit",
@@ -133,8 +112,8 @@ class _LoginState extends State<Login> {
                             MaterialPageRoute(builder: (context) => const Register()),
                           );
                         },
-                        child: const Text("Don't have an account? Register",
-                          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                        child: Text("Don't have an account? Register",
+                          style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold),
                         ),
                       ),
                     ],
@@ -148,14 +127,4 @@ class _LoginState extends State<Login> {
     );
   }
 
-  BoxDecoration getTextFieldDecoration() {
-    return BoxDecoration(
-      color: Colors.white70,
-      border: Border.all(
-        width: 4,
-        color: Colors.orange,
-      ),
-      borderRadius: BorderRadius.circular(30),
-    );
-  }
 }

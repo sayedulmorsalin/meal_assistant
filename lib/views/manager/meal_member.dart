@@ -4,6 +4,7 @@ import 'package:mess_management/models/user_model.dart';
 import 'package:mess_management/models/meal_model.dart';
 import 'package:mess_management/services/auth_service.dart';
 import 'package:mess_management/services/database_service.dart';
+import '../../core/app_colors.dart';
 
 class MealMember extends StatefulWidget {
   const MealMember({super.key});
@@ -147,15 +148,15 @@ class _MealMemberState extends State<MealMember> {
                   Text(
                     'Balance: ₹${balance.toStringAsFixed(2)}',
                     style: TextStyle(
-                      color: balance >= 0 ? Colors.green : Colors.red,
-                      fontWeight: FontWeight.w500,
+                      color: balance >= 0 ? AppColors.success : AppColors.error,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ],
               ),
               trailing: _currentUser!.role == UserRole.manager || _currentUser!.role == UserRole.superAdmin
                 ? IconButton(
-                    icon: const Icon(Icons.add_circle, color: Colors.blue),
+                    icon: Icon(Icons.add_circle, color: Theme.of(context).colorScheme.primary),
                     onPressed: () => _addDeposit(member),
                   )
                 : null,

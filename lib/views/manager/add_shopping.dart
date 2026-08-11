@@ -4,6 +4,7 @@ import 'package:mess_management/services/database_service.dart';
 import 'package:mess_management/services/auth_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:mess_management/models/user_model.dart';
+import '../../core/app_colors.dart';
 
 class ProductItem {
   final String productName;
@@ -186,23 +187,19 @@ class _AddShoppingState extends State<AddShopping> {
                         ElevatedButton(
                           onPressed: _saveItems,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
+                            backgroundColor: AppColors.success,
+                            foregroundColor: Colors.white,
                           ),
-                          child: const Text(
-                            'Save All',
-                            style: TextStyle(color: Colors.white),
-                          ),
+                          child: const Text('Save All'),
                         ),
                         const SizedBox(width: 8),
                         ElevatedButton(
                           onPressed: _clearInputs,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red,
+                            backgroundColor: AppColors.error,
+                            foregroundColor: Colors.white,
                           ),
-                          child: const Text(
-                            'Clear All',
-                            style: TextStyle(color: Colors.white),
-                          ),
+                          child: const Text('Clear All'),
                         ),
                       ],
                     ),

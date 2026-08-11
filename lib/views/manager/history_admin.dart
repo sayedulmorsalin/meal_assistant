@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../models/meal_model.dart';
+import '../../models/user_model.dart';
+import '../../services/auth_service.dart';
+import '../../services/database_service.dart';
+import '../../core/app_colors.dart';
 
 class HistoryAdmin extends StatefulWidget {
   const HistoryAdmin({super.key});
@@ -9,56 +14,73 @@ class HistoryAdmin extends StatefulWidget {
 }
 
 class _HistoryAdminState extends State<HistoryAdmin> {
-  final Map<int, String> _calendarData = {};
+  final DatabaseService _dbService = DatabaseService();
+  final AuthService _authService = AuthService();
+  
+  UserModel? _user;
+  bool _isLoading = true;
   final DateTime _today = DateTime.now();
-  final double _totalDeposit = 5000.0;
-  final double _mealRate = 50.0;
-
-  // Mock user data
-  final List<Map<String, dynamic>> _users = [
-    {
-      'name': 'John Doe',
-      'meals': {
-        1: '1,0|1,0|1,0',
-        2: '0,1|1,0|0,1',
-        3: '1,0|1,1|1,0',
-      },
-      'details': 'Room 101, Vegetarian'
-    },
-    {
-      'name': 'Jane Smith',
-      'meals': {
-        1: '0,1|1,0|0,0',
-        2: '1,0|1,1|1,0',
-        3: '0,0|1,0|1,1',
-      },
-      'details': 'Room 102, Non-vegetarian'
-    },
-  ];
+  
+  double _totalDeposit = 5000.0;
+  double _mealRate = 50.0;
+  
+  List<UserModel> _members = [];
+  final Map<int, List<MealModel>> _monthlyMeals = {};
 
   @override
   void initState() {
     super.initState();
-    _initializeSampleData();
+    _loadData();
   }
 
-  void _initializeSampleData() {
-    for (int day = 1; day <= 31; day++) {
-      _calendarData[day] = "0,0|0,0|0,0";
+  void _loadData() async {
+    String? uid = _authService.currentUid;
+    if (uid != null) {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      if (doc.exists && mounted) {
+        setState(() => _user = UserModel.fromMap(doc.data()!));
+        _listenToData();
+      }
     }
-    // Set sample data
-    _calendarData[5] = "1,0|1,1|1,0";
-    _calendarData[12] = "1,0|0,0|1,2";
-    _calendarData[15] = "1,1|1,0|1,0";
+  }
+
+  void _listenToData() {
+    if (_user == null || _user!.messId == null) return;
+    String messId = _user!.messId!;
+
+    FirebaseFirestore.instance.collection('messes').doc(messId).snapshots().listen((doc) {
+      if (doc.exists && mounted) {
+        setState(() {
+          _totalDeposit = (doc.data()?['totalDeposit'] ?? 5000.0).toDouble();
+          _mealRate = (doc.data()?['mealRate'] ?? 50.0).toDouble();
+        });
+      }
+    });
+
+    _dbService.getMessMembers(messId).listen((members) {
+      if (mounted) setState(() => _members = members);
+    });
+
+    _dbService.getMessMonthlyMeals(messId, _today.year, _today.month).listen((meals) {
+      if (mounted) {
+        setState(() {
+          _monthlyMeals.clear();
+          for (var meal in meals) {
+            _monthlyMeals.putIfAbsent(meal.date.day, () => []).add(meal);
+          }
+          _isLoading = false;
+        });
+      }
+    });
   }
 
   int get _totalMeals {
     int sum = 0;
-    _calendarData.forEach((key, value) {
-      List<String> meals = value.split('|');
+    _monthlyMeals.forEach((day, meals) {
       for (var meal in meals) {
-        List<String> parts = meal.split(',');
-        sum += int.parse(parts[0]) + int.parse(parts[1]);
+        if (meal.breakfast) sum += 1 + meal.guestBreakfast;
+        if (meal.lunch) sum += 1 + meal.guestLunch;
+        if (meal.dinner) sum += 1 + meal.guestDinner;
       }
     });
     return sum;
@@ -70,6 +92,7 @@ class _HistoryAdminState extends State<HistoryAdmin> {
     showModalBottomSheet(
       context: context,
       builder: (context) {
+        final dayMeals = _monthlyMeals[day] ?? [];
         return Container(
           padding: const EdgeInsets.all(16),
           height: MediaQuery.of(context).size.height * 0.7,
@@ -77,24 +100,23 @@ class _HistoryAdminState extends State<HistoryAdmin> {
             children: [
               Text('Meal Details for Day $day',
                   style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const Divider(),
               Expanded(
                 child: ListView.builder(
-                  itemCount: _users.length,
+                  itemCount: _members.length,
                   itemBuilder: (context, index) {
-                    final user = _users[index];
-                    final meals = user['meals'][day]?.split('|') ?? ['0,0', '0,0', '0,0'];
+                    final member = _members[index];
+                    final meal = dayMeals.firstWhere(
+                      (m) => m.userId == member.uid,
+                      orElse: () => MealModel(id: "", userId: member.uid, messId: "", date: DateTime.now()),
+                    );
                     return ListTile(
-                      title: Text(user['name']),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Breakfast: ${meals[0].split(',')[0]} (${meals[0].split(',')[1]} guest)'),
-                          Text('Lunch: ${meals[1].split(',')[0]} (${meals[1].split(',')[1]} guest)'),
-                          Text('Dinner: ${meals[2].split(',')[0]} (${meals[2].split(',')[1]} guest)'),
-                        ],
+                      title: Text(member.name),
+                      subtitle: Text(
+                        'B: ${meal.breakfast ? 1 : 0}(+${meal.guestBreakfast}), '
+                        'L: ${meal.lunch ? 1 : 0}(+${meal.guestLunch}), '
+                        'D: ${meal.dinner ? 1 : 0}(+${meal.guestDinner})',
                       ),
-                      trailing: Text(user['details'],
-                          style: TextStyle(color: Colors.grey[600])),
                     );
                   },
                 ),
@@ -108,15 +130,15 @@ class _HistoryAdminState extends State<HistoryAdmin> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Meal History (Admin)'),
+        title: const Text('Mess History (Monthly)'),
         centerTitle: true,
       ),
       body: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-        ),
+        color: Theme.of(context).colorScheme.surface,
         child: Column(
           children: [
             Expanded(
@@ -133,6 +155,15 @@ class _HistoryAdminState extends State<HistoryAdmin> {
                   itemBuilder: (context, index) {
                     int day = index + 1;
                     bool isToday = day == _today.day;
+                    final dayMeals = _monthlyMeals[day] ?? [];
+
+                    int b = 0, l = 0, d = 0;
+                    int gb = 0, gl = 0, gd = 0;
+                    for (var meal in dayMeals) {
+                      if (meal.breakfast) { b++; gb += meal.guestBreakfast; }
+                      if (meal.lunch) { l++; gl += meal.guestLunch; }
+                      if (meal.dinner) { d++; gd += meal.guestDinner; }
+                    }
 
                     return GestureDetector(
                       onTap: () => _showDayDetails(context, day),
@@ -141,12 +172,12 @@ class _HistoryAdminState extends State<HistoryAdmin> {
                         child: Container(
                           decoration: BoxDecoration(
                             color: isToday
-                                ? Colors.blue.withOpacity(0.2)
-                                : Colors.grey[100],
+                                ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
+                                : Theme.of(context).colorScheme.surface,
                             borderRadius: BorderRadius.circular(8.0),
                             border: isToday
-                                ? Border.all(color: Colors.blue, width: 2)
-                                : null,
+                                ? Border.all(color: Theme.of(context).colorScheme.primary, width: 2)
+                                : Border.all(color: Theme.of(context).colorScheme.outlineVariant),
                           ),
                           child: Padding(
                             padding: const EdgeInsets.only(left: 8.0),
@@ -159,7 +190,7 @@ class _HistoryAdminState extends State<HistoryAdmin> {
                                   Text(
                                     "$day",
                                     style: TextStyle(
-                                      color: isToday ? Colors.blue : Colors.black,
+                                      color: isToday ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface,
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -167,17 +198,10 @@ class _HistoryAdminState extends State<HistoryAdmin> {
                                   Padding(
                                     padding: const EdgeInsets.only(top: 2.0),
                                     child: Text(
-                                      _calendarData[day]!
-                                          .split('|')
-                                          .asMap()
-                                          .entries
-                                          .map((e) {
-                                        List<String> parts = e.value.split(',');
-                                        return "${['B', 'L', 'D'][e.key]}:${parts[0]}${parts[1] != '0' ? '(+${parts[1]})' : ''}";
-                                      }).join('\n'),
+                                      "B:$b${gb > 0 ? '($gb)' : ''}\nL:$l${gl > 0 ? '($gl)' : ''}\nD:$d${gd > 0 ? '($gd)' : ''}",
                                       style: TextStyle(
-                                        color: isToday ? Colors.blue : Colors.grey[800],
-                                        fontSize: 12,
+                                        color: isToday ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant,
+                                        fontSize: 11,
                                         fontWeight: FontWeight.bold,
                                         height: 1.0,
                                       ),
@@ -200,11 +224,11 @@ class _HistoryAdminState extends State<HistoryAdmin> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: Theme.of(context).colorScheme.surface,
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black12,
+                    color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.1),
                     blurRadius: 10,
                     spreadRadius: 2,
                   ),
@@ -216,9 +240,9 @@ class _HistoryAdminState extends State<HistoryAdmin> {
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
                       _buildStatCard("Total Deposit",
-                          "৳${_totalDeposit.toStringAsFixed(2)}", Colors.green),
+                          "₹${_totalDeposit.toStringAsFixed(2)}", AppColors.success),
                       _buildStatCard("Available Balance",
-                          "৳${_availableBalance.toStringAsFixed(2)}", Colors.blue),
+                          "₹${_availableBalance.toStringAsFixed(2)}", Theme.of(context).colorScheme.primary),
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -226,9 +250,9 @@ class _HistoryAdminState extends State<HistoryAdmin> {
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
                       _buildStatCard("Meal Rate",
-                          "৳${_mealRate.toStringAsFixed(2)}", Colors.orange),
+                          "₹${_mealRate.toStringAsFixed(2)}", AppColors.warning),
                       _buildStatCard(
-                          "Total Meals", _totalMeals.toString(), Colors.purple),
+                          "Total Meals", _totalMeals.toString(), AppColors.info),
                     ],
                   ),
                 ],
@@ -243,7 +267,7 @@ class _HistoryAdminState extends State<HistoryAdmin> {
   Widget _buildStatCard(String title, String value, Color color) {
     return Expanded(
       child: Card(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         elevation: 2,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
@@ -257,7 +281,7 @@ class _HistoryAdminState extends State<HistoryAdmin> {
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
-                  color: Colors.grey[700],
+                  color: Theme.of(context).colorScheme.outline,
                 ),
               ),
               const SizedBox(height: 6),

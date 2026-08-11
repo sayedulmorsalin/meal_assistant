@@ -5,6 +5,7 @@ import 'package:mess_management/models/user_model.dart';
 import 'package:mess_management/services/auth_service.dart';
 import 'package:mess_management/services/database_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../core/app_colors.dart';
 
 class Transaction extends StatefulWidget {
   const Transaction({super.key});
@@ -63,9 +64,9 @@ class _TransactionState extends State<Transaction> {
               itemBuilder: (context, index) {
                 final log = logs[index];
                 return ListTile(
-                  leading: const Icon(
+                  leading: Icon(
                     Icons.history,
-                    color: Colors.blue,
+                    color: Theme.of(context).colorScheme.primary,
                     size: 32,
                   ),
                   title: RichText(
@@ -83,7 +84,7 @@ class _TransactionState extends State<Transaction> {
                           text: '\n${DateFormat('dd/MM/yyyy HH:mm').format(log.timestamp)}',
                           style: TextStyle(
                             fontSize: 14,
-                            color: Colors.grey[600],
+                            color: Theme.of(context).colorScheme.outline,
                           ),
                         ),
                       ],

@@ -1,51 +1,52 @@
-# Implementation Plan - Theme Maintenance Page
+# Implementation Plan - Completing App Functionality
 
-This plan outlines the steps to add a theme maintenance (settings) page to the Mess Management application, allowing users to switch between Light, Dark, and System theme modes.
+This plan aims to make all remaining "placeholder" features fully functional by integrating them with Firebase Firestore.
 
 ## User Review Required
 
 > [!IMPORTANT]
-> This change introduces the `provider` package for state management. This is the recommended approach for handling global application state like themes in Flutter.
+> - **Messaging**: I will implement a global mess chat. All members of a mess will see the same messages.
+> - **Meal Planning**: Managers will be able to set the "Menu of the week", which members can then view.
+> - **Real Data**: I will replace all remaining "Sample Data" with live database streams.
 
 ## Proposed Changes
 
-### Core
-#### [NEW] [theme_provider.dart](file:///D:/all code/Flutter all projects/mess_management/lib/core/theme_provider.dart)
-- Create a `ThemeProvider` class extending `ChangeNotifier`.
-- Manage `ThemeMode` (light, dark, system).
-- Persist theme selection using `SharedPreferences` (optional but recommended, will check if available).
+### Models
+#### [NEW] [message_model.dart](file:///D:/all code/Flutter all projects/mess_management/lib/models/message_model.dart)
+- Define `MessageModel` with `id`, `senderId`, `senderName`, `text`, `imageUrl`, `timestamp`.
 
-#### [MODIFY] [pubspec.yaml](file:///D:/all code/Flutter all projects/mess_management/pubspec.yaml)
-- Add `provider: ^6.1.1` dependency.
-- Add `shared_preferences: ^2.3.2` for persistence.
+#### [NEW] [meal_plan_model.dart](file:///D:/all code/Flutter all projects/mess_management/lib/models/meal_plan_model.dart)
+- Define `MealPlanModel` to store the menu for each day of the week.
 
-#### [MODIFY] [main.dart](file:///D:/all code/Flutter all projects/mess_management/lib/main.dart)
-- Wrap `MyApp` with `ChangeNotifierProvider<ThemeProvider>`.
-- Configure `MaterialApp` to use `themeMode` from the provider.
-- Define `darkTheme` in `MaterialApp`.
+### Services
+#### [MODIFY] [database_service.dart](file:///D:/all code/Flutter all projects/mess_management/lib/services/database_service.dart)
+- **Chat**:
+    - `sendMessage(String messId, MessageModel message)`
+    - `getMessages(String messId)`: Stream of messages.
+- **Meal Planning**:
+    - `updateMealPlan(String messId, Map<String, dynamic> plan)`
+    - `getMealPlan(String messId)`: Stream of the current plan.
+- **History Analytics**:
+    - Ensure `getMessMonthlyMeals` provides enough data for the Admin History view.
 
 ### Views
-#### [NEW] [settings_page.dart](file:///D:/all code/Flutter all projects/mess_management/lib/views/settings/settings_page.dart)
-- Implement a dedicated settings page.
-- Add a section for "Theme Settings" with options for Light, Dark, and System Default.
-- Use `RadioListTile` or a `Switch` for selection.
+#### [MODIFY] [manager_messaging.dart](file:///D:/all code/Flutter all projects/mess_management/lib/views/manager/manager_messaging.dart) & [masseging.dart](file:///D:/all code/Flutter all projects/mess_management/lib/views/member/masseging.dart)
+- Connect to `DatabaseService` messages stream.
+- Implement real "Send" logic that writes to Firestore.
+- Add "Sender Name" to bubbles.
 
-#### [MODIFY] [profile.dart](file:///D:/all code/Flutter all projects/mess_management/lib/views/member/profile.dart)
-- Remove the local `SettingsPage` class.
-- Update the navigation to point to the new `SettingsPage` file.
+#### [MODIFY] [add_meal_planning.dart](file:///D:/all code/Flutter all projects/mess_management/lib/views/manager/add_meal_planning.dart)
+- Implement logic to save the edited plan to Firestore.
 
-#### [MODIFY] [user_home.dart](file:///D:/all code/Flutter all projects/mess_management/lib/views/member/user_home.dart)
-- Add a "Settings" option to the `Drawer` if not already present (it's currently missing, though "Profile" is there).
-- Alternatively, ensure "Profile" -> "Settings" flow is clear.
+#### [MODIFY] [meal_planning.dart](file:///D:/all code/Flutter all projects/mess_management/lib/views/member/meal_planning.dart)
+- Remove sample data and listen to the mess meal plan stream.
+
+#### [MODIFY] [history_admin.dart](file:///D:/all code/Flutter all projects/mess_management/lib/views/manager/history_admin.dart)
+- Replace sample logic with actual calculations using the `meals` and `messes` collections.
 
 ## Verification Plan
 
-### Automated Tests
-- N/A (Manual UI verification)
-
 ### Manual Verification
-1. Open the app and navigate to **Profile** -> **Settings**.
-2. Change theme to **Dark Mode** and verify the whole app UI updates.
-3. Change theme to **Light Mode** and verify.
-4. Change theme to **System Default** and verify it follows device settings.
-5. Restart the app and verify the theme preference is persisted (if SharedPreferences is implemented).
+1.  **Chat**: Open chat on two different devices/emulators. Send a message on one and verify it appears instantly on the other.
+2.  **Meal Planning**: As a Manager, update the menu. As a Member, verify the menu updates on the "Meal Planning" page.
+3.  **Analytics**: Verify that the Admin History correctly sums up all meals and guest meals for the entire mess.

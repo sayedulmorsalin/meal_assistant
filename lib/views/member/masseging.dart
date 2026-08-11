@@ -1,4 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../models/message_model.dart';
+import '../../models/user_model.dart';
+import '../../services/auth_service.dart';
+import '../../services/database_service.dart';
+
 class Masseging extends StatefulWidget {
   const Masseging({super.key});
 
@@ -8,30 +14,31 @@ class Masseging extends StatefulWidget {
 
 class _MassegingState extends State<Masseging> {
   final TextEditingController _messageController = TextEditingController();
-  final List<Message> _messages = [
-    Message(
-      text: 'Hey, how are you?',
-      sender: 'John',
-      timestamp: DateTime.now().subtract(const Duration(minutes: 5)),
-    ),
-    Message(
-      text: 'I\'m doing great, thanks!',
-      sender: 'me',
-      timestamp: DateTime.now().subtract(const Duration(minutes: 3)),
-    ),
-    Message(
-      text: 'Any updates on the project?',
-      sender: 'John',
-      timestamp: DateTime.now().subtract(const Duration(minutes: 1)),
-    ),
-  ];
+  final DatabaseService _dbService = DatabaseService();
+  final AuthService _authService = AuthService();
+  UserModel? _user;
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
+    _loadUser();
     _messageController.addListener(() {
       setState(() {});
     });
+  }
+
+  void _loadUser() async {
+    String? uid = _authService.currentUid;
+    if (uid != null) {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      if (doc.exists && mounted) {
+        setState(() {
+          _user = UserModel.fromMap(doc.data()!);
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -40,38 +47,51 @@ class _MassegingState extends State<Masseging> {
     super.dispose();
   }
 
-  void _sendMessage(String text) {
-    if (text.isEmpty) return;
-    setState(() {
-      _messages.add(Message(
-        text: text,
-        sender: 'me',
-        timestamp: DateTime.now(),
-      ));
-      _messageController.clear();
-    });
+  void _sendMessage(String text) async {
+    if (text.isEmpty || _user == null || _user!.messId == null) return;
+    
+    final message = MessageModel(
+      id: FirebaseFirestore.instance.collection('messes').doc().id,
+      senderId: _user!.uid,
+      senderName: _user!.name,
+      text: text,
+      timestamp: DateTime.now(),
+    );
+
+    await _dbService.sendMessage(_user!.messId!, message);
+    _messageController.clear();
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (_user == null || _user!.messId == null) return const Scaffold(body: Center(child: Text("Error: Not in a mess")));
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Manager Chat'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
+        title: const Text('Mess Chat'),
       ),
       body: Column(
         children: [
           Expanded(
-            child: ListView.builder(
-              reverse: false,
-              padding: const EdgeInsets.all(8.0),
-              itemCount: _messages.length,
-              itemBuilder: (context, index) {
-                final message = _messages[index];
-                return _buildMessageBubble(message);
+            child: StreamBuilder<List<MessageModel>>(
+              stream: _dbService.getMessages(_user!.messId!),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return const Center(child: Text("Start the conversation!"));
+                }
+                final messages = snapshot.data!;
+                return ListView.builder(
+                  reverse: true,
+                  padding: const EdgeInsets.all(8.0),
+                  itemCount: messages.length,
+                  itemBuilder: (context, index) {
+                    return _buildMessageBubble(messages[index]);
+                  },
+                );
               },
             ),
           ),
@@ -81,8 +101,8 @@ class _MassegingState extends State<Masseging> {
     );
   }
 
-  Widget _buildMessageBubble(Message message) {
-    final isMe = message.sender == 'me';
+  Widget _buildMessageBubble(MessageModel message) {
+    final isMe = message.senderId == _user!.uid;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
@@ -98,16 +118,28 @@ class _MassegingState extends State<Masseging> {
               horizontal: 16.0,
             ),
             decoration: BoxDecoration(
-              color: isMe ? Colors.blue : Colors.grey[300],
+              color: isMe ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(20.0),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (!isMe)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4.0),
+                    child: Text(
+                      message.senderName,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                  ),
                 Text(
                   message.text,
                   style: TextStyle(
-                    color: isMe ? Colors.white : Colors.black,
+                    color: isMe ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -115,7 +147,7 @@ class _MassegingState extends State<Masseging> {
                   '${message.timestamp.hour}:${message.timestamp.minute.toString().padLeft(2, '0')}',
                   style: TextStyle(
                     fontSize: 10,
-                    color: isMe ? Colors.white70 : Colors.black54,
+                    color: isMe ? Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.7) : Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],
@@ -130,10 +162,10 @@ class _MassegingState extends State<Masseging> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.2),
+            color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.1),
             spreadRadius: 2,
             blurRadius: 5,
             offset: const Offset(0, 3),
@@ -143,25 +175,20 @@ class _MassegingState extends State<Masseging> {
       child: Row(
         children: [
           IconButton(
-            icon: const Icon(Icons.camera_alt, color: Colors.grey),
-            onPressed: () {
-              // Implement camera functionality
-              print('Open camera');
-            },
+            icon: Icon(Icons.camera_alt, color: Theme.of(context).colorScheme.outline),
+            onPressed: () {},
           ),
           IconButton(
-            icon: const Icon(Icons.image, color: Colors.grey),
-            onPressed: () {
-              // Implement image picker functionality
-              print('Choose image');
-            },
+            icon: Icon(Icons.image, color: Theme.of(context).colorScheme.outline),
+            onPressed: () {},
           ),
           Expanded(
             child: TextField(
               controller: _messageController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 hintText: 'Type a message...',
-                border: InputBorder.none,
+                fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               ),
               onSubmitted: _sendMessage,
             ),
@@ -170,8 +197,8 @@ class _MassegingState extends State<Masseging> {
             icon: Icon(
               Icons.send,
               color: _messageController.text.isEmpty
-                  ? Colors.grey
-                  : Colors.blue,
+                  ? Theme.of(context).colorScheme.outline
+                  : Theme.of(context).colorScheme.primary,
             ),
             onPressed: _messageController.text.isEmpty
                 ? null
@@ -182,16 +209,3 @@ class _MassegingState extends State<Masseging> {
     );
   }
 }
-
-class Message {
-  final String text;
-  final String sender;
-  final DateTime timestamp;
-
-  Message({
-    required this.text,
-    required this.sender,
-    required this.timestamp,
-  });
-}
-

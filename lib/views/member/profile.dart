@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:mess_management/services/auth_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:mess_management/models/user_model.dart';
+import '../settings/settings_page.dart';
 
 class Profile extends StatefulWidget {
   const Profile({super.key});
@@ -13,8 +16,29 @@ class Profile extends StatefulWidget {
 class _ProfileState extends State<Profile> {
   File? _profileImage;
   final ImagePicker _picker = ImagePicker();
-  final TextEditingController _nameController = TextEditingController(text: 'John Doe');
-  final TextEditingController _statusController = TextEditingController(text: 'Available');
+  final TextEditingController _nameController = TextEditingController();
+  UserModel? _user;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  void _loadUserData() async {
+    String? uid = AuthService().currentUid;
+    if (uid != null) {
+      DocumentSnapshot doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      if (doc.exists && mounted) {
+        setState(() {
+          _user = UserModel.fromMap(doc.data() as Map<String, dynamic>);
+          _nameController.text = _user?.name ?? '';
+          _isLoading = false;
+        });
+      }
+    }
+  }
 
   void _showImagePicker() async {
     showModalBottomSheet(
@@ -65,9 +89,15 @@ class _ProfileState extends State<Profile> {
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () {
-              setState(() {});
-              Navigator.of(context).pop();
+            onPressed: () async {
+              if (_user != null) {
+                await FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(_user!.uid)
+                    .update({'name': _nameController.text});
+                setState(() {});
+              }
+              if (context.mounted) Navigator.of(context).pop();
             },
             child: const Text('Save'),
           ),
@@ -78,6 +108,9 @@ class _ProfileState extends State<Profile> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
     return Scaffold(
       appBar: AppBar(
         title: const Text('My Profile'),
@@ -110,11 +143,6 @@ class _ProfileState extends State<Profile> {
               title: 'Name',
               value: _nameController.text,
               onTap: () => _showEditDialog('Edit Name', _nameController),
-            ),
-            ProfileInfoTile(
-              title: 'Status',
-              value: _statusController.text,
-              onTap: () => _showEditDialog('Edit Status', _statusController),
             ),
             const SizedBox(height: 30),
             ProfileActionTile(
@@ -206,7 +234,7 @@ class ProfileActionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      leading: Icon(icon, size: 30, color: Colors.teal),
+      leading: Icon(icon, size: 30, color: Theme.of(context).colorScheme.primary),
       title: Text(title, style: const TextStyle(fontSize: 16)),
       trailing: const Icon(Icons.arrow_forward_ios, size: 18),
       onTap: onTap,
@@ -214,16 +242,3 @@ class ProfileActionTile extends StatelessWidget {
   }
 }
 
-class SettingsPage extends StatelessWidget {
-  const SettingsPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
-      body: const Center(
-        child: Text('Settings Page Content'),
-      ),
-    );
-  }
-}

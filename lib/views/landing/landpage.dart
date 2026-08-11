@@ -56,31 +56,17 @@ class _LandpageState extends State<Landpage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        title: const Text(
-          "Welcome to Meal Assistant",
-          style: TextStyle(
-            color: Colors.black,
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        centerTitle: true,
+        title: const Text("Welcome to Meal Assistant"),
       ),
       body: Container(
-        decoration: const BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage("assets/images/landpage.jpeg"),
-            fit: BoxFit.cover,
-          ),
-        ),
+        color: Theme.of(context).colorScheme.surface,
         child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _buildButton("Create new meal +", () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CreateMess()))),
+              _buildButton(context, "Create new meal +", () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CreateMess()))),
               const SizedBox(height: 30),
-              _buildButton("Join in a meal   +", () => Navigator.push(context, MaterialPageRoute(builder: (context) => const Join()))),
+              _buildButton(context, "Join in a meal   +", () => Navigator.push(context, MaterialPageRoute(builder: (context) => const Join()))),
             ],
           ),
         ),
@@ -88,19 +74,16 @@ class _LandpageState extends State<Landpage> {
     );
   }
 
-  Widget _buildButton(String text, VoidCallback onPressed) {
+  Widget _buildButton(BuildContext context, String text, VoidCallback onPressed) {
     return SizedBox(
-      width: 200,
+      width: 250,
       child: ElevatedButton(
         onPressed: onPressed,
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.orange[400],
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.all(15),
+          padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(30),
           ),
-          elevation: 10,
         ),
         child: Text(
           text,

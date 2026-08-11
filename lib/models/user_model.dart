@@ -5,6 +5,7 @@ class UserModel {
   final String name;
   final String email;
   final UserRole role;
+  final UserRole? participationRole; // Roles like member or manager for Super Admin
   final String? messId;
   final String? profileImage;
   final String status;
@@ -14,6 +15,7 @@ class UserModel {
     required this.name,
     required this.email,
     required this.role,
+    this.participationRole,
     this.messId,
     this.profileImage,
     required this.status,
@@ -25,6 +27,7 @@ class UserModel {
       'name': name,
       'email': email,
       'role': role.toString().split('.').last,
+      'participationRole': participationRole?.toString().split('.').last,
       'messId': messId,
       'profileImage': profileImage,
       'status': status,
@@ -40,6 +43,12 @@ class UserModel {
         (e) => e.toString().split('.').last == map['role'],
         orElse: () => UserRole.member,
       ),
+      participationRole: map['participationRole'] != null
+          ? UserRole.values.firstWhere(
+              (e) => e.toString().split('.').last == map['participationRole'],
+              orElse: () => UserRole.member,
+            )
+          : null,
       messId: map['messId'],
       profileImage: map['profileImage'],
       status: map['status'] ?? '',

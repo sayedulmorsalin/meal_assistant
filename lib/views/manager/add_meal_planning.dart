@@ -1,4 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../models/meal_plan_model.dart';
+import '../../models/user_model.dart';
+import '../../services/auth_service.dart';
+import '../../services/database_service.dart';
 
 class AddMealPlanning extends StatefulWidget {
   const AddMealPlanning({super.key});
@@ -8,64 +13,112 @@ class AddMealPlanning extends StatefulWidget {
 }
 
 class _AddMealPlanningState extends State<AddMealPlanning> {
+  final DatabaseService _dbService = DatabaseService();
+  final AuthService _authService = AuthService();
+  UserModel? _user;
+  bool _isLoading = true;
+
   final List<String> days = [
-    'Monday',
-    'Tuesday',
-    'Wednesday',
-    'Thursday',
-    'Friday',
-    'Saturday',
-    'Sunday'
+    'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
   ];
 
-  late Map<String, Map<String, String>> meals;
+  final Map<String, TextEditingController> _breakfastControllers = {};
+  final Map<String, TextEditingController> _lunchControllers = {};
+  final Map<String, TextEditingController> _dinnerControllers = {};
 
   @override
   void initState() {
     super.initState();
-    initializeMeals();
+    for (var day in days) {
+      _breakfastControllers[day] = TextEditingController();
+      _lunchControllers[day] = TextEditingController();
+      _dinnerControllers[day] = TextEditingController();
+    }
+    _loadData();
   }
 
-  void initializeMeals() {
-    meals = {};
+  void _loadData() async {
+    String? uid = _authService.currentUid;
+    if (uid != null) {
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      if (userDoc.exists) {
+        _user = UserModel.fromMap(userDoc.data()!);
+        if (_user!.messId != null) {
+          final plan = await _dbService.getMealPlan(_user!.messId!).first;
+          for (var dayPlan in plan) {
+            _breakfastControllers[dayPlan.day]?.text = dayPlan.breakfast;
+            _lunchControllers[dayPlan.day]?.text = dayPlan.lunch;
+            _dinnerControllers[dayPlan.day]?.text = dayPlan.dinner;
+          }
+        }
+        if (mounted) setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    for (var controller in _breakfastControllers.values) {
+      controller.dispose();
+    }
+    for (var controller in _lunchControllers.values) {
+      controller.dispose();
+    }
+    for (var controller in _dinnerControllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  void _savePlan() async {
+    if (_user == null || _user!.messId == null) return;
+
+    List<MealPlanModel> plan = [];
     for (var day in days) {
-      meals[day] = {
-        'breakfast': '',
-        'lunch': '',
-        'dinner': '',
-      };
+      plan.add(MealPlanModel(
+        day: day,
+        breakfast: _breakfastControllers[day]!.text,
+        lunch: _lunchControllers[day]!.text,
+        dinner: _dinnerControllers[day]!.text,
+      ));
+    }
+
+    setState(() => _isLoading = true);
+    await _dbService.updateMealPlan(_user!.messId!, plan);
+    if (mounted) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Meal plan updated!")));
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Meal Planning'),
+        title: const Text('Edit Weekly Menu'),
+        actions: [
+          IconButton(icon: const Icon(Icons.save), onPressed: _savePlan),
+        ],
       ),
       body: ListView.builder(
+        padding: const EdgeInsets.all(16),
         itemCount: days.length,
         itemBuilder: (context, index) {
           final day = days[index];
           return Card(
-            margin: const EdgeInsets.all(8),
+            margin: const EdgeInsets.only(bottom: 16),
             child: Padding(
-              padding: const EdgeInsets.all(12.0),
+              padding: const EdgeInsets.all(16.0),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    day,
-                    style: const TextStyle(
-                        fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      _buildMealButton(day, 'breakfast'),
-                      _buildMealButton(day, 'lunch'),
-                      _buildMealButton(day, 'dinner'),
-                    ],
-                  ),
+                  Text(day, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary)),
+                  const SizedBox(height: 12),
+                  _buildInputField("Breakfast", _breakfastControllers[day]!),
+                  _buildInputField("Lunch", _lunchControllers[day]!),
+                  _buildInputField("Dinner", _dinnerControllers[day]!),
                 ],
               ),
             ),
@@ -75,116 +128,17 @@ class _AddMealPlanningState extends State<AddMealPlanning> {
     );
   }
 
-  Widget _buildMealButton(String day, String mealType) {
-    final mealText = meals[day]![mealType]!;
-    return Expanded(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        child: ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.blue[50],
-            foregroundColor: Colors.blue,
-          ),
-          onPressed: () => _editMeal(context, day, mealType),
-          child: Text(
-            mealText.isEmpty ? 'Edit $mealType' : mealText,
-            maxLines: 2,
-            textAlign: TextAlign.center,
-            overflow: TextOverflow.ellipsis,
-          ),
+  Widget _buildInputField(String label, TextEditingController controller) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: TextField(
+        controller: controller,
+        decoration: InputDecoration(
+          labelText: label,
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         ),
       ),
-    );
-  }
-
-  void _editMeal(BuildContext context, String day, String mealType) async {
-    final currentMeal = meals[day]![mealType]!;
-    final newMeal = await showDialog<String>(
-      context: context,
-      builder: (context) => MealEditDialog(initialMeal: currentMeal),
-    );
-
-    if (newMeal != null && newMeal != currentMeal) {
-      setState(() {
-        meals[day]![mealType] = newMeal;
-      });
-    }
-  }
-}
-
-class MealEditDialog extends StatefulWidget {
-  final String initialMeal;
-
-  const MealEditDialog({super.key, required this.initialMeal});
-
-  @override
-  State<MealEditDialog> createState() => _MealEditDialogState();
-}
-
-class _MealEditDialogState extends State<MealEditDialog> {
-  late TextEditingController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: widget.initialMeal);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Edit Meal'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            controller: _controller,
-            decoration: const InputDecoration(
-              hintText: 'Enter your meal',
-              border: OutlineInputBorder(),
-            ),
-            maxLines: 2,
-          ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _buildSpecialMealButton('Oatmeal'),
-              _buildSpecialMealButton('Salad'),
-              _buildSpecialMealButton('Pizza'),
-              _buildSpecialMealButton('Grilled Chicken'),
-              _buildSpecialMealButton('Pasta'),
-              _buildSpecialMealButton('Sandwich'),
-            ],
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        ElevatedButton(
-          onPressed: () => Navigator.pop(context, _controller.text),
-          child: const Text('Save'),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSpecialMealButton(String meal) {
-    return OutlinedButton(
-      onPressed: () {
-        _controller.text = meal;
-      },
-      child: Text(meal),
     );
   }
 }

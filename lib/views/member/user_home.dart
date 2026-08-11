@@ -6,11 +6,13 @@ import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/database_service.dart';
 import '../manager/manager_home.dart';
+import '../admin/admin_home.dart';
 import 'history.dart';
 import 'meal_planning.dart';
 import 'profile.dart';
 import 'shopping.dart';
 import 'transaction.dart';
+import '../../core/app_colors.dart';
 
 class UserHome extends StatefulWidget {
   const UserHome({super.key});
@@ -306,7 +308,7 @@ class _UserHomeState extends State<UserHome> {
           ),
           Switch(
             value: value,
-            activeTrackColor: Colors.green,
+            activeTrackColor: AppColors.success,
             onChanged: onChanged,
           ),
         ],
@@ -339,10 +341,12 @@ class _UserHomeState extends State<UserHome> {
     }
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: isMultiSelectMode ? Colors.green[100] : Colors.yellow[100],
+        backgroundColor: isMultiSelectMode 
+            ? Theme.of(context).colorScheme.secondaryContainer 
+            : Theme.of(context).colorScheme.primaryContainer,
         leading: isMultiSelectMode
             ? IconButton(
-          icon: const Icon(Icons.close, color: Colors.black),
+          icon: const Icon(Icons.close),
           onPressed: () {
             setState(() {
               isMultiSelectMode = false;
@@ -353,21 +357,19 @@ class _UserHomeState extends State<UserHome> {
             : null,
         title: Text(
           isMultiSelectMode ? "${selectedDays.length} Selected" : "Meal Assistant",
-          style: const TextStyle(
-              color: Colors.black, fontSize: 24, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
         actions: [
           if (isMultiSelectMode)
             IconButton(
-              icon: const Icon(Icons.edit, color: Colors.black),
+              icon: const Icon(Icons.edit),
               onPressed: selectedDays.isNotEmpty
                   ? () => _showDateDetails(context)
                   : null,
             )
           else
             IconButton(
-              icon: const Icon(Icons.message, color: Colors.black),
+              icon: const Icon(Icons.message),
               onPressed: () {
                 Navigator.push(
                   context,
@@ -383,7 +385,7 @@ class _UserHomeState extends State<UserHome> {
           children: [
             DrawerHeader(
               decoration: BoxDecoration(
-                color: Colors.yellow[100],
+                color: Theme.of(context).colorScheme.primaryContainer,
               ),
               child: const Text(
                 'Meal Assistant',
@@ -393,6 +395,18 @@ class _UserHomeState extends State<UserHome> {
                 ),
               ),
             ),
+            if (_user?.role == UserRole.superAdmin)
+              ListTile(
+                leading: const Icon(Icons.admin_panel_settings, color: Colors.amber),
+                title: const Text('Super Admin Dashboard', style: TextStyle(fontWeight: FontWeight.bold)),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const AdminHome()),
+                  );
+                },
+              ),
             ListTile(
               leading: const Icon(Icons.person),
               title: const Text('Profile'),
@@ -463,18 +477,7 @@ class _UserHomeState extends State<UserHome> {
         ),
       ),
       body: Container(
-        decoration: const BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage("assets/images/user home.jpeg"),
-            fit: BoxFit.cover,
-            colorFilter: ColorFilter.matrix([
-              1, 0, 0, 0, 0,
-              0, 1, 0, 0, 0,
-              0, 0, 1, 0, 0,
-              0, 0, 0, 0.5, 0,
-            ]),
-          ),
-        ),
+        color: Theme.of(context).colorScheme.surface,
         child: Column(
           children: [
             Expanded(
@@ -527,18 +530,18 @@ class _UserHomeState extends State<UserHome> {
                         child: Container(
                           decoration: BoxDecoration(
                             color: isMultiSelectMode && isSelected
-                                ? Colors.green.withValues(alpha: 0.8)
+                                ? Theme.of(context).colorScheme.secondary.withValues(alpha: 0.2)
                                 : isToday
-                                ? Colors.blue.withValues(alpha: 0.8)
-                                : Colors.white.withValues(alpha: 0.8),
+                                ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
+                                : Theme.of(context).colorScheme.surface,
                             borderRadius: BorderRadius.circular(8.0),
                             border: isSingleSelected
                                 ? Border.all(
-                                color: Colors.greenAccent, width: 2)
+                                color: Theme.of(context).colorScheme.secondary, width: 2)
                                 : isToday
                                 ? Border.all(
-                                color: Colors.blueAccent, width: 2)
-                                : null,
+                                color: Theme.of(context).colorScheme.primary, width: 2)
+                                : Border.all(color: Theme.of(context).colorScheme.outlineVariant),
                           ),
                           child: Padding(
                             padding: const EdgeInsets.all(4.0),
@@ -551,10 +554,7 @@ class _UserHomeState extends State<UserHome> {
                                     Text(
                                       "$day",
                                       style: TextStyle(
-                                        color: (isMultiSelectMode && isSelected) ||
-                                            isToday
-                                            ? Colors.white
-                                            : Colors.black,
+                                        color: isToday ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface,
                                         fontSize: 14,
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -562,8 +562,8 @@ class _UserHomeState extends State<UserHome> {
                                     if (_pendingRequests.containsKey(day))
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                                        decoration: BoxDecoration(
-                                          color: Colors.orange,
+                                    decoration: BoxDecoration(
+                                          color: AppColors.warning,
                                           borderRadius: BorderRadius.circular(4),
                                         ),
                                         child: const Text(
@@ -572,9 +572,9 @@ class _UserHomeState extends State<UserHome> {
                                         ),
                                       ),
                                     if (isMultiSelectMode)
-                                      Icon(
+                                Icon(
                                         isSelected ? Icons.check_circle : Icons.circle_outlined,
-                                        color: isSelected ? Colors.white : Colors.white70,
+                                        color: isSelected ? AppColors.success : Theme.of(context).colorScheme.outline,
                                         size: 14,
                                       ),
                                   ],
@@ -587,11 +587,7 @@ class _UserHomeState extends State<UserHome> {
                                         "L:${_monthlyMeals[day]!.lunch ? '1' : '0'}${_monthlyMeals[day]!.guestLunch != 0 ? '(${_monthlyMeals[day]!.guestLunch})' : ''}\n"
                                         "D:${_monthlyMeals[day]!.dinner ? '1' : '0'}${_monthlyMeals[day]!.guestDinner != 0 ? '(${_monthlyMeals[day]!.guestDinner})' : ''}",
                                   style: TextStyle(
-                                    color: (isMultiSelectMode &&
-                                        isSelected) ||
-                                        isToday
-                                        ? Colors.white
-                                        : Colors.grey[800],
+                                    color: isToday ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant,
                                     fontSize: 10,
                                     fontWeight: FontWeight.bold,
                                     height: 1.1,
@@ -614,12 +610,12 @@ class _UserHomeState extends State<UserHome> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.9),
+                color: Theme.of(context).colorScheme.surface,
                 borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(20)),
-                boxShadow: const [
+                boxShadow: [
                   BoxShadow(
-                    color: Colors.black12,
+                    color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.1),
                     blurRadius: 10,
                     spreadRadius: 2,
                   ),
@@ -631,9 +627,9 @@ class _UserHomeState extends State<UserHome> {
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
                       _buildStatCard("Total Deposit",
-                          "₹${totalDeposit.toStringAsFixed(2)}", Colors.green),
+                          "₹${totalDeposit.toStringAsFixed(2)}", AppColors.success),
                       _buildStatCard("Available Balance",
-                          "₹${availableBalance.toStringAsFixed(2)}", Colors.blue),
+                          "₹${availableBalance.toStringAsFixed(2)}", Theme.of(context).colorScheme.primary),
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -641,9 +637,9 @@ class _UserHomeState extends State<UserHome> {
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
                       _buildStatCard("Meal Rate",
-                          "₹${mealRate.toStringAsFixed(2)}", Colors.orange),
+                          "₹${mealRate.toStringAsFixed(2)}", AppColors.warning),
                       _buildStatCard(
-                          "Total Meals", totalMeals.toString(), Colors.purple),
+                          "Total Meals", totalMeals.toString(), AppColors.info),
                     ],
                   ),
                 ],
@@ -672,7 +668,7 @@ class _UserHomeState extends State<UserHome> {
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: Colors.grey[700],
+                  color: Theme.of(context).colorScheme.outline,
                 ),
               ),
               const SizedBox(height: 8),

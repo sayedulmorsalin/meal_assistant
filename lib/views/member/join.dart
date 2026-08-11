@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mess_management/views/member/user_home.dart';
 import 'package:mess_management/services/auth_service.dart';
 import 'package:mess_management/services/database_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class Join extends StatefulWidget {
   const Join({super.key});
@@ -22,20 +23,33 @@ class _JoinState extends State<Join> {
     setState(() => _isLoading = true);
     String? uid = _auth.currentUid;
     if (uid != null) {
-      bool success = await _db.joinMess(_joinKeyController.text.trim(), uid);
+      // Get user name for the request
+      var userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      String userName = userDoc.data()?['name'] ?? 'Unknown User';
+
+      String? error = await _db.sendJoinRequest(uid, userName, _joinKeyController.text.trim());
       
       if (!mounted) return;
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Successfully joined the mess!")),
-        );
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const UserHome()),
+      if (error == null) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text("Request Sent"),
+            content: const Text("Your request to join has been sent to the Super Admin. Please wait for approval."),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).pop(); // Back to landing page
+                },
+                child: const Text("OK"),
+              ),
+            ],
+          ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Failed to join. Invalid key.")),
+          SnackBar(content: Text(error), backgroundColor: Theme.of(context).colorScheme.error),
         );
       }
     }
@@ -46,59 +60,37 @@ class _JoinState extends State<Join> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.black87,
-        title: const Text(
-          "Join Meal System",
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 30,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        title: const Text("Join Meal System"),
       ),
       body: Container(
-        decoration: const BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage("assets/images/join meal.jpeg"),
-            fit: BoxFit.cover,
-          ),
-        ),
+        color: Theme.of(context).colorScheme.surface,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 100,),
-              const Text("  Join key",
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 25.0,
-                    fontWeight: FontWeight.bold
-                ),),
-              Container(
-                padding: const EdgeInsets.only(left: 20.0),
-                decoration: getTextFieldDecoration(),
-                child: TextField(
-                  controller: _joinKeyController,
-                  decoration: const InputDecoration(
-                    border: InputBorder.none,
-                    hintText: "Enter 6-digit key",
-                    hintStyle: TextStyle(color: Colors.white54),
-                  ),
-                  style: const TextStyle(color: Colors.white),
+              const SizedBox(height: 80),
+              TextField(
+                controller: _joinKeyController,
+                decoration: const InputDecoration(
+                  labelText: "Join Key",
+                  hintText: "Enter 6-digit key",
+                  prefixIcon: Icon(Icons.vpn_key_outlined),
                 ),
               ),
               const SizedBox(height: 50.0),
               Center(
-                child: _isLoading
-                ? const CircularProgressIndicator(color: Colors.white)
+                child: _isLoading 
+                ? const CircularProgressIndicator()
                 : ElevatedButton(
-                    onPressed: _handleJoin,
-                    child: Text("Join",
-                      style: TextStyle(
-                          color: Colors.purple[700],
-                          fontSize: 20.0,
-                          fontWeight: FontWeight.bold),)
+                  onPressed: _handleJoin,
+                  child: const Text(
+                    "Send Request",
+                    style: TextStyle(
+                      fontSize: 20.0,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               )
             ],
@@ -108,14 +100,4 @@ class _JoinState extends State<Join> {
     );
   }
 
-  BoxDecoration getTextFieldDecoration() {
-    return BoxDecoration(
-      color: Colors.black45,
-      border: Border.all(
-        width: 6,
-        color: Colors.white,
-      ),
-      borderRadius: BorderRadius.circular(30),
-    );
-  }
 }

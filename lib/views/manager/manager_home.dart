@@ -9,9 +9,11 @@ import 'add_meal_planning.dart';
 import 'add_shopping.dart';
 import 'manager_messaging.dart';
 import 'meal_member.dart';
+import '../admin/admin_home.dart';
 import '../member/history.dart';
 import '../member/profile.dart';
 import '../member/transaction.dart';
+import '../../core/app_colors.dart';
 
 class ManagerHome extends StatefulWidget {
   const ManagerHome({super.key});
@@ -238,7 +240,7 @@ class _ManagerHomeState extends State<ManagerHome> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             IconButton(
-                              icon: const Icon(Icons.check, color: Colors.green), 
+                              icon: const Icon(Icons.check, color: AppColors.success), 
                               onPressed: () async {
                                 if (_manager != null) {
                                   await _dbService.approveRequest(req.id, _manager!.uid);
@@ -246,7 +248,7 @@ class _ManagerHomeState extends State<ManagerHome> {
                               }
                             ),
                             IconButton(
-                              icon: const Icon(Icons.close, color: Colors.red), 
+                              icon: const Icon(Icons.close, color: AppColors.error), 
                               onPressed: () async {
                                 if (_manager != null) {
                                   await _dbService.rejectRequest(req.id, _manager!.uid);
@@ -276,10 +278,12 @@ class _ManagerHomeState extends State<ManagerHome> {
     }
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: isMultiSelectMode ? Colors.green[100] : Colors.yellow[100],
+        backgroundColor: isMultiSelectMode 
+            ? Theme.of(context).colorScheme.secondaryContainer 
+            : Theme.of(context).colorScheme.primaryContainer,
         leading: isMultiSelectMode
             ? IconButton(
-                icon: const Icon(Icons.close, color: Colors.black),
+                icon: const Icon(Icons.close),
                 onPressed: () {
                   setState(() {
                     isMultiSelectMode = false;
@@ -290,14 +294,12 @@ class _ManagerHomeState extends State<ManagerHome> {
             : null,
         title: Text(
           isMultiSelectMode ? "${selectedDays.length} Selected" : "Meal Assistant",
-          style: const TextStyle(
-              color: Colors.black, fontSize: 24, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
         actions: [
           if (isMultiSelectMode)
             IconButton(
-              icon: const Icon(Icons.info_outline, color: Colors.black),
+              icon: const Icon(Icons.info_outline),
               onPressed: selectedDays.isNotEmpty
                   ? () => _showMultiDayUsers(context)
                   : null,
@@ -306,7 +308,7 @@ class _ManagerHomeState extends State<ManagerHome> {
             Stack(
               children: [
                 IconButton(
-                  icon: const Icon(Icons.notifications, color: Colors.black),
+                  icon: const Icon(Icons.notifications),
                   onPressed: () => _showRequestsDialog(context),
                 ),
                 if (_pendingRequests.isNotEmpty)
@@ -315,7 +317,7 @@ class _ManagerHomeState extends State<ManagerHome> {
                     top: 8,
                     child: Container(
                       padding: const EdgeInsets.all(2),
-                      decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                      decoration: const BoxDecoration(color: AppColors.error, shape: BoxShape.circle),
                       constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
                       child: Text(
                         '${_pendingRequests.length}',
@@ -327,7 +329,7 @@ class _ManagerHomeState extends State<ManagerHome> {
               ],
             ),
             IconButton(
-              icon: const Icon(Icons.message, color: Colors.black),
+              icon: const Icon(Icons.message),
               onPressed: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const ManagerMessaging()),
@@ -342,7 +344,7 @@ class _ManagerHomeState extends State<ManagerHome> {
           children: [
             DrawerHeader(
               decoration: BoxDecoration(
-                color: Colors.yellow[100],
+                color: Theme.of(context).colorScheme.primaryContainer,
               ),
               child: const Text(
                 'Meal Assistant',
@@ -352,6 +354,18 @@ class _ManagerHomeState extends State<ManagerHome> {
                 ),
               ),
             ),
+            if (_manager?.role == UserRole.superAdmin)
+              ListTile(
+                leading: const Icon(Icons.admin_panel_settings, color: Colors.amber),
+                title: const Text('Super Admin Dashboard', style: TextStyle(fontWeight: FontWeight.bold)),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const AdminHome()),
+                  );
+                },
+              ),
             ListTile(
               leading: const Icon(Icons.person),
               title: const Text('Profile'),
@@ -415,18 +429,7 @@ class _ManagerHomeState extends State<ManagerHome> {
         ),
       ),
       body: Container(
-        decoration: const BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage("assets/images/user home.jpeg"),
-            fit: BoxFit.cover,
-            colorFilter: ColorFilter.matrix([
-              1, 0, 0, 0, 0,
-              0, 1, 0, 0, 0,
-              0, 0, 1, 0, 0,
-              0, 0, 0, 0.5, 0,
-            ]),
-          ),
-        ),
+        color: Theme.of(context).colorScheme.surface,
         child: Column(
           children: [
             Expanded(
@@ -479,16 +482,16 @@ class _ManagerHomeState extends State<ManagerHome> {
                             Container(
                               decoration: BoxDecoration(
                                 color: isMultiSelectMode && isSelected
-                                    ? Colors.green.withValues(alpha: 0.8)
+                                    ? Theme.of(context).colorScheme.secondary.withValues(alpha: 0.2)
                                     : isToday
-                                    ? Colors.blue.withValues(alpha: 0.8)
-                                    : Colors.white.withValues(alpha: 0.8),
+                                    ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
+                                    : Theme.of(context).colorScheme.surface,
                                 borderRadius: BorderRadius.circular(8.0),
                                 border: isSingleSelected
-                                    ? Border.all(color: Colors.greenAccent, width: 2)
+                                    ? Border.all(color: Theme.of(context).colorScheme.secondary, width: 2)
                                     : isToday
-                                    ? Border.all(color: Colors.blueAccent, width: 2)
-                                    : null,
+                                    ? Border.all(color: Theme.of(context).colorScheme.primary, width: 2)
+                                    : Border.all(color: Theme.of(context).colorScheme.outlineVariant),
                               ),
                               child: Padding(
                                 padding: const EdgeInsets.only(left: 8.0),
@@ -501,9 +504,7 @@ class _ManagerHomeState extends State<ManagerHome> {
                                       Text(
                                         "$day",
                                         style: TextStyle(
-                                          color: (isMultiSelectMode && isSelected) || isToday
-                                              ? Colors.white
-                                              : Colors.black,
+                                          color: isToday ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface,
                                           fontSize: 18,
                                           fontWeight: FontWeight.bold,
                                         ),
@@ -525,9 +526,7 @@ class _ManagerHomeState extends State<ManagerHome> {
                                              "D:$d${gd > 0 ? '($gd)' : ''}";
                                     }(),
                                     style: TextStyle(
-                                      color: (isMultiSelectMode && isSelected) || isToday
-                                          ? Colors.white
-                                          : Colors.grey[800],
+                                      color: isToday ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant,
                                       fontSize: 12,
                                       fontWeight: FontWeight.bold,
                                       height: 1.0,
@@ -548,7 +547,7 @@ class _ManagerHomeState extends State<ManagerHome> {
                                 right: 2,
                                 child: Icon(
                                   isSelected ? Icons.check_circle : Icons.circle_outlined,
-                                  color: isSelected ? Colors.white : Colors.white70,
+                                  color: isSelected ? AppColors.success : Theme.of(context).colorScheme.outline,
                                   size: 16,
                                 ),
                               ),
@@ -563,11 +562,11 @@ class _ManagerHomeState extends State<ManagerHome> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.9),
+                color: Theme.of(context).colorScheme.surface,
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                boxShadow: const [
+                boxShadow: [
                   BoxShadow(
-                    color: Colors.black12,
+                    color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.1),
                     blurRadius: 10,
                     spreadRadius: 2,
                   ),
@@ -578,16 +577,16 @@ class _ManagerHomeState extends State<ManagerHome> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      _buildStatCard("Total Deposit", "₹${totalDeposit.toStringAsFixed(2)}", Colors.green),
-                      _buildStatCard("Available Balance", "₹${availableBalance.toStringAsFixed(2)}", Colors.blue),
+                      _buildStatCard("Total Deposit", "₹${totalDeposit.toStringAsFixed(2)}", AppColors.success),
+                      _buildStatCard("Available Balance", "₹${availableBalance.toStringAsFixed(2)}", Theme.of(context).colorScheme.primary),
                     ],
                   ),
                   const SizedBox(height: 10),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      _buildStatCard("Meal Rate", "₹${mealRate.toStringAsFixed(2)}", Colors.orange),
-                      _buildStatCard("Total Meals", totalMeals.toString(), Colors.purple),
+                      _buildStatCard("Meal Rate", "₹${mealRate.toStringAsFixed(2)}", AppColors.warning),
+                      _buildStatCard("Total Meals", totalMeals.toString(), AppColors.info),
                     ],
                   ),
                 ],
@@ -616,7 +615,7 @@ class _ManagerHomeState extends State<ManagerHome> {
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: Colors.grey[700],
+                  color: Theme.of(context).colorScheme.outline,
                 ),
               ),
               const SizedBox(height: 8),

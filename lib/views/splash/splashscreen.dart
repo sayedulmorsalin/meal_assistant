@@ -26,7 +26,7 @@ class _SplashscreenState extends State<Splashscreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -35,13 +35,13 @@ class _SplashscreenState extends State<Splashscreen> {
               'assets/images/logo.png', // Ensure this exists or use a placeholder icon
               height: 150,
               errorBuilder: (context, error, stackTrace) =>
-                  const Icon(Icons.restaurant, size: 100, color: Colors.blue),
+                  Icon(Icons.restaurant, size: 100, color: Theme.of(context).colorScheme.primary),
             ),
             const SizedBox(height: 20),
-            const Text(
+            Text(
               "Mess Management",
               style: TextStyle(
-                  fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blue),
+                  fontSize: 24, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary),
             ),
             const SizedBox(height: 10),
             const CircularProgressIndicator(),

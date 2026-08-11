@@ -26,7 +26,7 @@ class _RegisterState extends State<Register> {
     }
 
     setState(() => _isLoading = true);
-    var result = await _authService.signUp(
+    String? error = await _authService.signUp(
       _emailController.text.trim(),
       _passwordController.text.trim(),
       _nameController.text.trim(),
@@ -35,14 +35,17 @@ class _RegisterState extends State<Register> {
     if (!mounted) return;
     setState(() => _isLoading = false);
 
-    if (result != null) {
+    if (error == null) {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const Login()),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Registration Failed")),
+        SnackBar(
+          content: Text(error),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
       );
     }
   }
@@ -51,11 +54,11 @@ class _RegisterState extends State<Register> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.black,
-        title: const Text(
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        title: Text(
           "Create Account",
           style: TextStyle(
-            color: Colors.white,
+            color: Theme.of(context).colorScheme.onPrimary,
             fontSize: 24,
             fontWeight: FontWeight.bold,
           ),
@@ -63,93 +66,48 @@ class _RegisterState extends State<Register> {
         centerTitle: true,
       ),
       body: Container(
-        decoration: const BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage("assets/images/register.jpeg"),
-            fit: BoxFit.cover,
-          ),
-        ),
+        color: Colors.white,
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                "Name",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 20.0,
-                  fontWeight: FontWeight.bold,
+              TextField(
+                controller: _nameController,
+                decoration: const InputDecoration(
+                  labelText: "Full Name",
+                  hintText: "Enter your full name",
+                  prefixIcon: Icon(Icons.person_outline),
                 ),
               ),
-              const SizedBox(height: 5),
-              Container(
-                padding: const EdgeInsets.only(left: 20.0),
-                decoration: getTextFieldDecoration(),
-                child: TextField(
-                  controller: _nameController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(border: InputBorder.none),
+              const SizedBox(height: 20.0),
+              TextField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(
+                  labelText: "Email",
+                  hintText: "Enter your email",
+                  prefixIcon: Icon(Icons.email_outlined),
                 ),
               ),
-              const SizedBox(height: 15.0),
-              const Text(
-                "Email",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 20.0,
-                  fontWeight: FontWeight.bold,
+              const SizedBox(height: 20.0),
+              TextField(
+                controller: _passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: "Password",
+                  hintText: "Set a password",
+                  prefixIcon: Icon(Icons.lock_outline),
                 ),
               ),
-              const SizedBox(height: 5),
-              Container(
-                padding: const EdgeInsets.only(left: 20.0),
-                decoration: getTextFieldDecoration(),
-                child: TextField(
-                  controller: _emailController,
-                  style: const TextStyle(color: Colors.white),
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(border: InputBorder.none),
-                ),
-              ),
-              const SizedBox(height: 15.0),
-              const Text(
-                "Set Password",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 20.0,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 5),
-              Container(
-                padding: const EdgeInsets.only(left: 20.0),
-                decoration: getTextFieldDecoration(),
-                child: TextField(
-                  controller: _passwordController,
-                  obscureText: true,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(border: InputBorder.none),
-                ),
-              ),
-              const SizedBox(height: 15.0),
-              const Text(
-                "Confirm Password",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 20.0,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 5),
-              Container(
-                padding: const EdgeInsets.only(left: 20.0),
-                decoration: getTextFieldDecoration(),
-                child: TextField(
-                  controller: _confirmPasswordController,
-                  obscureText: true,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(border: InputBorder.none),
+              const SizedBox(height: 20.0),
+              TextField(
+                controller: _confirmPasswordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: "Confirm Password",
+                  hintText: "Repeat password",
+                  prefixIcon: Icon(Icons.lock_reset_outlined),
                 ),
               ),
               const SizedBox(height: 30.0),
@@ -159,8 +117,8 @@ class _RegisterState extends State<Register> {
                   : ElevatedButton(
                       onPressed: _register,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: Colors.black,
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        foregroundColor: Theme.of(context).colorScheme.onPrimary,
                         padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 15),
                       ),
                       child: const Text(
@@ -179,14 +137,4 @@ class _RegisterState extends State<Register> {
     );
   }
 
-  BoxDecoration getTextFieldDecoration() {
-    return BoxDecoration(
-      color: Colors.black26,
-      border: Border.all(
-        width: 2,
-        color: Colors.white,
-      ),
-      borderRadius: BorderRadius.circular(30),
-    );
-  }
 }
