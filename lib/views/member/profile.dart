@@ -143,12 +143,6 @@ class _ProfileState extends State<Profile> {
       appBar: AppBar(
         title: const Text('My Profile'),
         centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () => _showLogoutDialog(),
-          ),
-        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -189,6 +183,16 @@ class _ProfileState extends State<Profile> {
               ),
             ),
             ProfileActionTile(
+              icon: Icons.privacy_tip_outlined,
+              title: 'Privacy Policy',
+              onTap: _showPrivacyPolicyDialog,
+            ),
+            ProfileActionTile(
+              icon: Icons.description_outlined,
+              title: 'Terms & Conditions',
+              onTap: _showTermsConditionsDialog,
+            ),
+            ProfileActionTile(
               icon: Icons.help_outline,
               title: 'Help & Support',
               onTap: _showHelpSupportDialog,
@@ -200,9 +204,21 @@ class _ProfileState extends State<Profile> {
             ),
             const Divider(),
             ProfileActionTile(
+              icon: Icons.logout,
+              title: 'Logout',
+              onTap: _showLogoutDialog,
+              isDestructive: true,
+            ),
+            ProfileActionTile(
               icon: Icons.exit_to_app,
               title: 'Leave Mess',
               onTap: _confirmLeaveMess,
+              isDestructive: true,
+            ),
+            ProfileActionTile(
+              icon: Icons.delete_forever,
+              title: 'Delete Account',
+              onTap: _confirmDeleteAccount,
               isDestructive: true,
             ),
           ],
@@ -267,6 +283,42 @@ class _ProfileState extends State<Profile> {
     );
   }
 
+  void _confirmDeleteAccount() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Account?'),
+        content: const Text(
+          'Are you sure you want to permanently delete your account? This action cannot be undone and all your profile data will be permanently removed.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: Navigator.of(context).pop,
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.of(context).pop();
+              setState(() => _isLoading = true);
+              String? error = await AuthService().deleteAccount();
+              if (mounted) {
+                setState(() => _isLoading = false);
+                if (error != null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(error)),
+                  );
+                } else {
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                }
+              }
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showHelpSupportDialog() {
     showDialog(
       context: context,
@@ -283,6 +335,64 @@ class _ProfileState extends State<Profile> {
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK')),
+        ],
+      ),
+    );
+  }
+
+  void _showPrivacyPolicyDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Privacy Policy'),
+        content: const SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Privacy Policy for Meal Assistant', style: TextStyle(fontWeight: FontWeight.bold)),
+              SizedBox(height: 8),
+              Text('Your privacy is important to us. Meal Assistant collects minimal data required to provide mess management services:'),
+              SizedBox(height: 8),
+              Text('• Personal Info: Name and Email for authentication & identification within your mess group.'),
+              SizedBox(height: 4),
+              Text('• Usage Data: Meal requests, deposits, shopping logs, and group messages.'),
+              SizedBox(height: 4),
+              Text('• Data Protection: We store your data securely in Cloud Firestore and do not share it with third parties.'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+
+  void _showTermsConditionsDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Terms & Conditions'),
+        content: const SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Terms & Conditions', style: TextStyle(fontWeight: FontWeight.bold)),
+              SizedBox(height: 8),
+              Text('By using Meal Assistant, you agree to the following terms:'),
+              SizedBox(height: 8),
+              Text('1. User Conduct: Members must accurately enter meal records and maintain respectful group communication.'),
+              SizedBox(height: 4),
+              Text('2. Mess Management: Deposits and shopping expenditures are managed collectively by your mess members and manager.'),
+              SizedBox(height: 4),
+              Text('3. Account Responsibility: You are responsible for keeping your login credentials confidential.'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
         ],
       ),
     );

@@ -106,13 +106,6 @@ class _AdminHomeState extends State<AdminHome> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Admin Dashboard'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () async => await _authService.signOut(),
-            tooltip: 'Logout',
-          ),
-        ],
       ),
       body: SingleChildScrollView(
         child: Padding(

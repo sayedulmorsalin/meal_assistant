@@ -70,4 +70,36 @@ class AuthService {
   Future<void> signOut() async {
     await _auth.signOut();
   }
+
+  // Delete Account
+  Future<String?> deleteAccount() async {
+    try {
+      User? user = _auth.currentUser;
+      if (user != null) {
+        String uid = user.uid;
+        DocumentSnapshot doc = await _db.collection('users').doc(uid).get();
+        if (doc.exists) {
+          Map<String, dynamic>? data = doc.data() as Map<String, dynamic>?;
+          String? messId = data?['messId'];
+          if (messId != null && messId.isNotEmpty) {
+            var messDoc = await _db.collection('messes').doc(messId).get();
+            if (messDoc.exists && messDoc.data()?['managerId'] == uid) {
+              await _db.collection('messes').doc(messId).update({'managerId': null});
+            }
+          }
+          await _db.collection('users').doc(uid).delete();
+        }
+        await user.delete();
+        return null;
+      }
+      return "No user currently logged in.";
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'requires-recent-login') {
+        return "For security reasons, please log out and log back in before deleting your account.";
+      }
+      return e.message ?? "Failed to delete account.";
+    } catch (e) {
+      return e.toString();
+    }
+  }
 }

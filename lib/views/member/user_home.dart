@@ -688,14 +688,6 @@ class _UserHomeState extends State<UserHome> {
                 _confirmLeaveMess();
               },
             ),
-            ListTile(
-              leading: const Icon(Icons.logout),
-              title: const Text('Logout'),
-              onTap: () async {
-                Navigator.pop(context);
-                await _authService.signOut();
-              },
-            ),
           ],
         ),
       ),

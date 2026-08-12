@@ -65,7 +65,7 @@ class _RegisterState extends State<Register> {
         centerTitle: true,
       ),
       body: Container(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20.0),
           child: Column(

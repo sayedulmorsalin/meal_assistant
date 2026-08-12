@@ -61,7 +61,7 @@ class _LoginState extends State<Login> {
                   fontWeight: FontWeight.bold),),
           ],),),
       body: Container(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         child: SingleChildScrollView(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20.0),
