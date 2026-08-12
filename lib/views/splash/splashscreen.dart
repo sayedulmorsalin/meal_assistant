@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:mess_management/main.dart';
+import 'package:meal_assistant/main.dart';
 
 class Splashscreen extends StatefulWidget {
   const Splashscreen({super.key});

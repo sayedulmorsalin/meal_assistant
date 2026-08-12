@@ -2,15 +2,15 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:mess_management/models/join_request_model.dart';
+import 'package:meal_assistant/models/join_request_model.dart';
 import 'dart:math';
-import 'package:mess_management/models/user_model.dart';
-import 'package:mess_management/models/mess_model.dart';
-import 'package:mess_management/models/meal_model.dart';
-import 'package:mess_management/models/log_model.dart';
-import 'package:mess_management/models/request_model.dart';
-import 'package:mess_management/models/message_model.dart';
-import 'package:mess_management/models/meal_plan_model.dart';
+import 'package:meal_assistant/models/user_model.dart';
+import 'package:meal_assistant/models/mess_model.dart';
+import 'package:meal_assistant/models/meal_model.dart';
+import 'package:meal_assistant/models/log_model.dart';
+import 'package:meal_assistant/models/request_model.dart';
+import 'package:meal_assistant/models/message_model.dart';
+import 'package:meal_assistant/models/meal_plan_model.dart';
 
 class DatabaseService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;

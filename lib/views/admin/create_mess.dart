@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:mess_management/views/admin/admin_home.dart';
-import 'package:mess_management/services/auth_service.dart';
-import 'package:mess_management/services/database_service.dart';
+import 'package:meal_assistant/views/admin/admin_home.dart';
+import 'package:meal_assistant/services/auth_service.dart';
+import 'package:meal_assistant/services/database_service.dart';
 
 class CreateMess extends StatefulWidget {
   const CreateMess({super.key});

@@ -1,4 +1,6 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../services/auth_service.dart';
 
 class Register extends StatefulWidget {
@@ -15,11 +17,41 @@ class _RegisterState extends State<Register> {
   final TextEditingController _confirmPasswordController = TextEditingController();
   final AuthService _authService = AuthService();
   bool _isLoading = false;
+  bool _agreeToTerms = false;
+
+  Future<void> _launchURL(String urlString) async {
+    final Uri url = Uri.parse(urlString);
+    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Could not open $urlString")),
+        );
+      }
+    }
+  }
 
   void _register() async {
+    if (_nameController.text.trim().isEmpty ||
+        _emailController.text.trim().isEmpty ||
+        _passwordController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please fill in all fields")),
+      );
+      return;
+    }
+
     if (_passwordController.text != _confirmPasswordController.text) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Passwords do not match")),
+      );
+      return;
+    }
+
+    if (!_agreeToTerms) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Please agree to the Terms & Conditions and Privacy Policy"),
+        ),
       );
       return;
     }
@@ -35,9 +67,6 @@ class _RegisterState extends State<Register> {
     setState(() => _isLoading = false);
 
     if (error == null) {
-      // AuthWrapper in main.dart will handle navigation automatically
-      // We can just pop the registration screen if needed, or do nothing.
-      // Since it was pushed from Login, popping will go back to the root AuthWrapper which will show the new state.
       Navigator.pop(context);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -109,7 +138,56 @@ class _RegisterState extends State<Register> {
                   prefixIcon: Icon(Icons.lock_reset_outlined),
                 ),
               ),
-              const SizedBox(height: 30.0),
+              const SizedBox(height: 15.0),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Checkbox(
+                    value: _agreeToTerms,
+                    activeColor: Theme.of(context).colorScheme.primary,
+                    onChanged: (val) {
+                      setState(() {
+                        _agreeToTerms = val ?? false;
+                      });
+                    },
+                  ),
+                  Expanded(
+                    child: RichText(
+                      text: TextSpan(
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurface,
+                          fontSize: 13.0,
+                        ),
+                        children: [
+                          const TextSpan(text: "I agree to the "),
+                          TextSpan(
+                            text: "Terms & Conditions",
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.primary,
+                              fontWeight: FontWeight.bold,
+                              decoration: TextDecoration.underline,
+                            ),
+                            recognizer: TapGestureRecognizer()
+                              ..onTap = () => _launchURL('https://meal-assistant-beta.vercel.app/terms'),
+                          ),
+                          const TextSpan(text: " and "),
+                          TextSpan(
+                            text: "Privacy Policy",
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.primary,
+                              fontWeight: FontWeight.bold,
+                              decoration: TextDecoration.underline,
+                            ),
+                            recognizer: TapGestureRecognizer()
+                              ..onTap = () => _launchURL('https://meal-assistant-beta.vercel.app/privacy-policy'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20.0),
               Center(
                 child: _isLoading 
                   ? const CircularProgressIndicator()
@@ -135,5 +213,4 @@ class _RegisterState extends State<Register> {
       ),
     );
   }
-
 }

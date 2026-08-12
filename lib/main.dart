@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:mess_management/views/landing/landpage.dart';
-import 'package:mess_management/views/auth/login.dart';
-import 'package:mess_management/models/user_model.dart';
-import 'package:mess_management/views/admin/admin_home.dart';
-import 'package:mess_management/views/manager/manager_home.dart';
-import 'package:mess_management/views/member/user_home.dart';
+import 'package:meal_assistant/views/landing/landpage.dart';
+import 'package:meal_assistant/views/auth/login.dart';
+import 'package:meal_assistant/models/user_model.dart';
+import 'package:meal_assistant/views/admin/admin_home.dart';
+import 'package:meal_assistant/views/manager/manager_home.dart';
+import 'package:meal_assistant/views/member/user_home.dart';
 import 'package:provider/provider.dart';
-import 'package:mess_management/core/theme_provider.dart';
-import 'package:mess_management/core/app_colors.dart';
+import 'package:meal_assistant/core/theme_provider.dart';
+import 'package:meal_assistant/core/app_colors.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -176,8 +176,6 @@ class AuthWrapper extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        print("AuthWrapper: ConnectionState: ${snapshot.connectionState}, hasData: ${snapshot.hasData}, user: ${snapshot.data?.uid}");
-        
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(body: Center(child: CircularProgressIndicator()));
         }

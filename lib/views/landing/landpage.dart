@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:mess_management/views/admin/create_mess.dart';
-import 'package:mess_management/views/member/join.dart';
-import 'package:mess_management/services/auth_service.dart';
-import 'package:mess_management/models/user_model.dart';
-import 'package:mess_management/views/manager/manager_home.dart';
-import 'package:mess_management/views/member/user_home.dart';
+import 'package:meal_assistant/views/admin/create_mess.dart';
+import 'package:meal_assistant/views/member/join.dart';
+import 'package:meal_assistant/services/auth_service.dart';
+import 'package:meal_assistant/models/user_model.dart';
+import 'package:meal_assistant/views/manager/manager_home.dart';
+import 'package:meal_assistant/views/member/user_home.dart';
 
 class Landpage extends StatefulWidget {
   const Landpage({super.key});

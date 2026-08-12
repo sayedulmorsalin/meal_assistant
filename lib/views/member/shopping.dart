@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:mess_management/services/database_service.dart';
-import 'package:mess_management/services/auth_service.dart';
+import 'package:meal_assistant/services/database_service.dart';
+import 'package:meal_assistant/services/auth_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:mess_management/models/user_model.dart';
+import 'package:meal_assistant/models/user_model.dart';
 import '../../core/app_colors.dart';
 
 class Shopping extends StatefulWidget {

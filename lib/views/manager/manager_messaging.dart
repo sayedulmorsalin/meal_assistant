@@ -1,10 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:mess_management/services/database_service.dart';
-import 'package:mess_management/services/auth_service.dart';
-import 'package:mess_management/models/message_model.dart';
-import 'package:mess_management/models/user_model.dart';
+import 'package:meal_assistant/services/database_service.dart';
+import 'package:meal_assistant/services/auth_service.dart';
+import 'package:meal_assistant/models/message_model.dart';
+import 'package:meal_assistant/models/user_model.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ManagerMessaging extends StatefulWidget {

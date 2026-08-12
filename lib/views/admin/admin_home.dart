@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:mess_management/models/join_request_model.dart';
-import 'package:mess_management/models/mess_model.dart';
-import 'package:mess_management/models/user_model.dart';
-import 'package:mess_management/services/auth_service.dart';
-import 'package:mess_management/services/database_service.dart';
+import 'package:meal_assistant/models/join_request_model.dart';
+import 'package:meal_assistant/models/mess_model.dart';
+import 'package:meal_assistant/models/user_model.dart';
+import 'package:meal_assistant/services/auth_service.dart';
+import 'package:meal_assistant/services/database_service.dart';
 import '../../core/app_colors.dart';
 
 class AdminHome extends StatefulWidget {

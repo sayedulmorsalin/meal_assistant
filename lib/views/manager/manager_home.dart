@@ -29,7 +29,11 @@ class _ManagerHomeState extends State<ManagerHome> {
 
   UserModel? _manager;
   final DateTime today = DateTime.now();
-  DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
+  DateTime _selectedMonth = DateTime(
+    DateTime.now().year,
+    DateTime.now().month,
+    1,
+  );
   List<int> selectedDays = [];
   bool isMultiSelectMode = false;
   int? selectedDay;
@@ -40,8 +44,18 @@ class _ManagerHomeState extends State<ManagerHome> {
   final Map<int, List<MealModel>> _monthlyMeals = {};
 
   final List<String> _monthNames = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
   ];
 
   @override
@@ -53,7 +67,8 @@ class _ManagerHomeState extends State<ManagerHome> {
   void _loadManagerData() async {
     String? uid = _authService.currentUid;
     if (uid != null) {
-      final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      final doc =
+          await FirebaseFirestore.instance.collection('users').doc(uid).get();
       if (doc.exists && mounted) {
         setState(() {
           _manager = UserModel.fromMap(doc.data()!);
@@ -71,60 +86,84 @@ class _ManagerHomeState extends State<ManagerHome> {
       if (mounted) setState(() => _members = members);
     });
 
-    _dbService.getMonthlyShoppingTotal(messId, _selectedMonth.year, _selectedMonth.month).listen((shoppingTotal) {
-      if (mounted) setState(() => totalShoppingCost = shoppingTotal);
-    });
+    _dbService
+        .getMonthlyShoppingTotal(
+          messId,
+          _selectedMonth.year,
+          _selectedMonth.month,
+        )
+        .listen((shoppingTotal) {
+          if (mounted) setState(() => totalShoppingCost = shoppingTotal);
+        });
 
     _dbService.getPendingRequests(messId).listen((requests) {
       if (mounted) setState(() => _pendingRequests = requests);
     });
 
-    FirebaseFirestore.instance.collection('meals')
+    FirebaseFirestore.instance
+        .collection('meals')
         .where('messId', isEqualTo: messId)
-        .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(DateTime(_selectedMonth.year, _selectedMonth.month, 1)))
-        .where('date', isLessThan: Timestamp.fromDate(DateTime(_selectedMonth.year, _selectedMonth.month + 1, 1)))
+        .where(
+          'date',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(
+            DateTime(_selectedMonth.year, _selectedMonth.month, 1),
+          ),
+        )
+        .where(
+          'date',
+          isLessThan: Timestamp.fromDate(
+            DateTime(_selectedMonth.year, _selectedMonth.month + 1, 1),
+          ),
+        )
         .snapshots()
         .listen((snapshot) {
-      if (mounted) {
-        setState(() {
-          _monthlyMeals.clear();
-          for (var doc in snapshot.docs) {
-            MealModel meal = MealModel.fromMap(doc.data());
-            _monthlyMeals.putIfAbsent(meal.date.day, () => []).add(meal);
+          if (mounted) {
+            setState(() {
+              _monthlyMeals.clear();
+              for (var doc in snapshot.docs) {
+                MealModel meal = MealModel.fromMap(doc.data());
+                _monthlyMeals.putIfAbsent(meal.date.day, () => []).add(meal);
+              }
+            });
           }
         });
-      }
-    });
   }
 
   bool _isDefaultMealOn(UserModel? user, DateTime selectedMonth, int day) {
     DateTime now = DateTime.now();
     DateTime joinDate = user?.createdAt ?? DateTime(now.year, now.month, 1);
-    
-    if (selectedMonth.year < joinDate.year || 
-       (selectedMonth.year == joinDate.year && selectedMonth.month < joinDate.month)) {
+
+    if (selectedMonth.year < joinDate.year ||
+        (selectedMonth.year == joinDate.year &&
+            selectedMonth.month < joinDate.month)) {
       return false;
     }
-    
-    if (selectedMonth.year > now.year || 
-       (selectedMonth.year == now.year && selectedMonth.month > now.month)) {
+
+    if (selectedMonth.year > now.year ||
+        (selectedMonth.year == now.year && selectedMonth.month > now.month)) {
       return false;
     }
-    
-    if (selectedMonth.year == joinDate.year && selectedMonth.month == joinDate.month) {
+
+    if (selectedMonth.year == joinDate.year &&
+        selectedMonth.month == joinDate.month) {
       if (day < joinDate.day) {
         return false;
       }
     }
-    
+
     return true;
   }
 
   int get maxElapsedDay {
-    if (_selectedMonth.year < today.year || 
-       (_selectedMonth.year == today.year && _selectedMonth.month < today.month)) {
-      return DateUtils.getDaysInMonth(_selectedMonth.year, _selectedMonth.month);
-    } else if (_selectedMonth.year == today.year && _selectedMonth.month == today.month) {
+    if (_selectedMonth.year < today.year ||
+        (_selectedMonth.year == today.year &&
+            _selectedMonth.month < today.month)) {
+      return DateUtils.getDaysInMonth(
+        _selectedMonth.year,
+        _selectedMonth.month,
+      );
+    } else if (_selectedMonth.year == today.year &&
+        _selectedMonth.month == today.month) {
       return today.day;
     } else {
       return 0;
@@ -140,11 +179,16 @@ class _ManagerHomeState extends State<ManagerHome> {
         bool defaultOn = _isDefaultMealOn(member, _selectedMonth, d);
         final meal = dayMeals.firstWhere(
           (m) => m.userId == member.uid,
-          orElse: () => MealModel(
-            id: "", userId: member.uid, messId: "",
-            date: DateTime(_selectedMonth.year, _selectedMonth.month, d),
-            breakfast: false, lunch: defaultOn, dinner: defaultOn,
-          ),
+          orElse:
+              () => MealModel(
+                id: "",
+                userId: member.uid,
+                messId: "",
+                date: DateTime(_selectedMonth.year, _selectedMonth.month, d),
+                breakfast: false,
+                lunch: defaultOn,
+                dinner: defaultOn,
+              ),
         );
         if (meal.breakfast) sum += 1;
         sum += meal.guestBreakfast;
@@ -159,8 +203,10 @@ class _ManagerHomeState extends State<ManagerHome> {
 
   int get totalMeals => totalElapsedMeals;
 
-  double get totalDeposit => _members.fold(0.0, (totalSum, m) => totalSum + m.deposit);
-  double get mealRate => totalElapsedMeals > 0 ? (totalShoppingCost / totalElapsedMeals) : 0.0;
+  double get totalDeposit =>
+      _members.fold(0.0, (totalSum, m) => totalSum + m.deposit);
+  double get mealRate =>
+      totalElapsedMeals > 0 ? (totalShoppingCost / totalElapsedMeals) : 0.0;
   double get availableBalance => totalDeposit - totalShoppingCost;
 
   void _showSingleDayUsers(BuildContext context, int day) {
@@ -173,29 +219,49 @@ class _ManagerHomeState extends State<ManagerHome> {
           height: MediaQuery.of(context).size.height * 0.7,
           child: Column(
             children: [
-              Text('Users for Day $day',
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              Text(
+                'Users for Day $day',
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               Expanded(
                 child: ListView.builder(
                   itemCount: _members.length,
                   itemBuilder: (context, index) {
                     final member = _members[index];
                     final meal = dayMeals.firstWhere(
-                      (m) => m.userId == member.uid, 
-                      orElse: () => MealModel(
-                        id: "", userId: member.uid, messId: "", 
-                        date: DateTime(_selectedMonth.year, _selectedMonth.month, day),
-                        breakfast: false, lunch: true, dinner: true,
-                      )
+                      (m) => m.userId == member.uid,
+                      orElse:
+                          () => MealModel(
+                            id: "",
+                            userId: member.uid,
+                            messId: "",
+                            date: DateTime(
+                              _selectedMonth.year,
+                              _selectedMonth.month,
+                              day,
+                            ),
+                            breakfast: false,
+                            lunch: true,
+                            dinner: true,
+                          ),
                     );
                     return ListTile(
                       title: Text(member.name),
                       subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Breakfast: ${meal.breakfast ? 1 : 0} (${meal.guestBreakfast} guest)'),
-                          Text('Lunch: ${meal.lunch ? 1 : 0} (${meal.guestLunch} guest)'),
-                          Text('Dinner: ${meal.dinner ? 1 : 0} (${meal.guestDinner} guest)'),
+                          Text(
+                            'Breakfast: ${meal.breakfast ? 1 : 0} (${meal.guestBreakfast} guest)',
+                          ),
+                          Text(
+                            'Lunch: ${meal.lunch ? 1 : 0} (${meal.guestLunch} guest)',
+                          ),
+                          Text(
+                            'Dinner: ${meal.dinner ? 1 : 0} (${meal.guestDinner} guest)',
+                          ),
                         ],
                       ),
                     );
@@ -218,8 +284,13 @@ class _ManagerHomeState extends State<ManagerHome> {
           height: MediaQuery.of(context).size.height * 0.7,
           child: Column(
             children: [
-              Text('Meal Details for Selected Days (${selectedDays.join(', ')})',
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              Text(
+                'Meal Details for Selected Days (${selectedDays.join(', ')})',
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               Expanded(
                 child: ListView.builder(
                   itemCount: _members.length,
@@ -235,8 +306,14 @@ class _ManagerHomeState extends State<ManagerHome> {
                     for (var day in selectedDays) {
                       final dayMeals = _monthlyMeals[day] ?? [];
                       final meal = dayMeals.firstWhere(
-                        (m) => m.userId == member.uid, 
-                        orElse: () => MealModel(id: "", userId: member.uid, messId: "", date: DateTime.now())
+                        (m) => m.userId == member.uid,
+                        orElse:
+                            () => MealModel(
+                              id: "",
+                              userId: member.uid,
+                              messId: "",
+                              date: DateTime.now(),
+                            ),
                       );
                       if (meal.id.isNotEmpty) {
                         totalBreakfast += meal.breakfast ? 1 : 0;
@@ -253,9 +330,13 @@ class _ManagerHomeState extends State<ManagerHome> {
                       subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Breakfast: $totalBreakfast ($totalGuestBreakfast guests)'),
+                          Text(
+                            'Breakfast: $totalBreakfast ($totalGuestBreakfast guests)',
+                          ),
                           Text('Lunch: $totalLunch ($totalGuestLunch guests)'),
-                          Text('Dinner: $totalDinner ($totalGuestDinner guests)'),
+                          Text(
+                            'Dinner: $totalDinner ($totalGuestDinner guests)',
+                          ),
                         ],
                       ),
                     );
@@ -280,46 +361,76 @@ class _ManagerHomeState extends State<ManagerHome> {
               content: SizedBox(
                 width: double.maxFinite,
                 height: 400,
-                child: _pendingRequests.isEmpty 
-                  ? const Center(child: Text("No pending requests"))
-                  : ListView.builder(
-                    itemCount: _pendingRequests.length,
-                    itemBuilder: (context, index) {
-                      final req = _pendingRequests[index];
-                      final user = _members.firstWhere(
-                        (m) => m.uid == req.userId, 
-                        orElse: () => UserModel(uid: "", name: "Unknown", email: "", role: UserRole.member, status: "")
-                      );
-                      return ListTile(
-                        title: Text("${user.name} - ${req.date.day}/${req.date.month}"),
-                        subtitle: Text(req.mealsRequested.entries.where((e) => e.value).map((e) => e.key).join(", ")),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.check, color: AppColors.success), 
-                              onPressed: () async {
-                                if (_manager != null) {
-                                  await _dbService.approveRequest(req.id, _manager!.uid);
-                                }
-                              }
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.close, color: AppColors.error), 
-                              onPressed: () async {
-                                if (_manager != null) {
-                                  await _dbService.rejectRequest(req.id, _manager!.uid);
-                                }
-                              }
-                            ),
-                          ],
+                child:
+                    _pendingRequests.isEmpty
+                        ? const Center(child: Text("No pending requests"))
+                        : ListView.builder(
+                          itemCount: _pendingRequests.length,
+                          itemBuilder: (context, index) {
+                            final req = _pendingRequests[index];
+                            final user = _members.firstWhere(
+                              (m) => m.uid == req.userId,
+                              orElse:
+                                  () => UserModel(
+                                    uid: "",
+                                    name: "Unknown",
+                                    email: "",
+                                    role: UserRole.member,
+                                    status: "",
+                                  ),
+                            );
+                            return ListTile(
+                              title: Text(
+                                "${user.name} - ${req.date.day}/${req.date.month}",
+                              ),
+                              subtitle: Text(
+                                req.mealsRequested.entries
+                                    .where((e) => e.value)
+                                    .map((e) => e.key)
+                                    .join(", "),
+                              ),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.check,
+                                      color: AppColors.success,
+                                    ),
+                                    onPressed: () async {
+                                      if (_manager != null) {
+                                        await _dbService.approveRequest(
+                                          req.id,
+                                          _manager!.uid,
+                                        );
+                                      }
+                                    },
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.close,
+                                      color: AppColors.error,
+                                    ),
+                                    onPressed: () async {
+                                      if (_manager != null) {
+                                        await _dbService.rejectRequest(
+                                          req.id,
+                                          _manager!.uid,
+                                        );
+                                      }
+                                    },
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
                         ),
-                      );
-                    },
-                  ),
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(context), child: const Text("Close")),
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Close"),
+                ),
               ],
             );
           },
@@ -335,31 +446,36 @@ class _ManagerHomeState extends State<ManagerHome> {
     }
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: isMultiSelectMode 
-            ? Theme.of(context).colorScheme.secondaryContainer 
-            : Theme.of(context).colorScheme.primaryContainer,
-        leading: isMultiSelectMode
-            ? IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: () {
-                  setState(() {
-                    isMultiSelectMode = false;
-                    selectedDays.clear();
-                  });
-                },
-              )
-            : null,
+        backgroundColor:
+            isMultiSelectMode
+                ? Theme.of(context).colorScheme.secondaryContainer
+                : Theme.of(context).colorScheme.primaryContainer,
+        leading:
+            isMultiSelectMode
+                ? IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () {
+                    setState(() {
+                      isMultiSelectMode = false;
+                      selectedDays.clear();
+                    });
+                  },
+                )
+                : null,
         title: Text(
-          isMultiSelectMode ? "${selectedDays.length} Selected" : "Meal Assistant",
+          isMultiSelectMode
+              ? "${selectedDays.length} Selected"
+              : "Meal Assistant",
         ),
         centerTitle: true,
         actions: [
           if (isMultiSelectMode)
             IconButton(
               icon: const Icon(Icons.info_outline),
-              onPressed: selectedDays.isNotEmpty
-                  ? () => _showMultiDayUsers(context)
-                  : null,
+              onPressed:
+                  selectedDays.isNotEmpty
+                      ? () => _showMultiDayUsers(context)
+                      : null,
             )
           else ...[
             Stack(
@@ -374,11 +490,20 @@ class _ManagerHomeState extends State<ManagerHome> {
                     top: 8,
                     child: Container(
                       padding: const EdgeInsets.all(2),
-                      decoration: const BoxDecoration(color: AppColors.error, shape: BoxShape.circle),
-                      constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+                      decoration: const BoxDecoration(
+                        color: AppColors.error,
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 14,
+                        minHeight: 14,
+                      ),
                       child: Text(
                         '${_pendingRequests.length}',
-                        style: const TextStyle(color: Colors.white, fontSize: 8),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 8,
+                        ),
                         textAlign: TextAlign.center,
                       ),
                     ),
@@ -388,148 +513,187 @@ class _ManagerHomeState extends State<ManagerHome> {
             IconButton(
               icon: const Icon(Icons.person_pin),
               tooltip: 'My Personal Meals',
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const UserHome()),
-              ),
+              onPressed:
+                  () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const UserHome()),
+                  ),
             ),
             IconButton(
               icon: const Icon(Icons.message),
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const ManagerMessaging()),
-              ),
+              onPressed:
+                  () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ManagerMessaging(),
+                    ),
+                  ),
             ),
           ],
         ],
       ),
-      drawer: isMultiSelectMode ? null : Drawer(
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            UserAccountsDrawerHeader(
-              accountName: Text(
-                _manager?.name ?? 'Manager',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
-                  color: Theme.of(context).colorScheme.onPrimary,
-                ),
-              ),
-              accountEmail: Text(
-                _manager?.email ?? '',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.9),
-                ),
-              ),
-              currentAccountPicture: CircleAvatar(
-                backgroundColor: Theme.of(context).colorScheme.onPrimary,
-                child: Text(
-                  _manager?.name.isNotEmpty == true ? _manager!.name[0].toUpperCase() : 'M',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-              ),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.person_pin, color: AppColors.primary),
-              title: const Text('My Personal Meals'),
-              subtitle: const Text('View & edit your personal meals as a member'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const UserHome()),
-                );
-              },
-            ),
-            const Divider(),
-            if (_manager?.role == UserRole.superAdmin)
-              ListTile(
-                leading: const Icon(Icons.admin_panel_settings, color: Colors.amber),
-                title: const Text('Super Admin Dashboard', style: TextStyle(fontWeight: FontWeight.bold)),
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const AdminHome()),
-                  );
-                },
-              ),
-            ListTile(
-              leading: const Icon(Icons.person),
-              title: const Text('Profile'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const Profile()),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.people),
-              title: const Text('Members & Deposits'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const MealMember()),
-                );
-              },
-            ),
+      drawer:
+          isMultiSelectMode
+              ? null
+              : Drawer(
+                child: ListView(
+                  padding: EdgeInsets.zero,
+                  children: [
+                    UserAccountsDrawerHeader(
+                      accountName: Text(
+                        _manager?.name ?? 'Manager',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                          color: Theme.of(context).colorScheme.onPrimary,
+                        ),
+                      ),
+                      accountEmail: Text(
+                        _manager?.email ?? '',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onPrimary.withValues(alpha: 0.9),
+                        ),
+                      ),
+                      currentAccountPicture: CircleAvatar(
+                        backgroundColor:
+                            Theme.of(context).colorScheme.onPrimary,
+                        child: Text(
+                          _manager?.name.isNotEmpty == true
+                              ? _manager!.name[0].toUpperCase()
+                              : 'M',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                    ListTile(
+                      leading: const Icon(
+                        Icons.person_pin,
+                        color: AppColors.primary,
+                      ),
+                      title: const Text('My Personal Meals'),
+                      subtitle: const Text(
+                        'View & edit your personal meals as a member',
+                      ),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const UserHome(),
+                          ),
+                        );
+                      },
+                    ),
+                    const Divider(),
+                    if (_manager?.role == UserRole.superAdmin)
+                      ListTile(
+                        leading: const Icon(
+                          Icons.admin_panel_settings,
+                          color: Colors.amber,
+                        ),
+                        title: const Text(
+                          'Super Admin Dashboard',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const AdminHome(),
+                            ),
+                          );
+                        },
+                      ),
+                    ListTile(
+                      leading: const Icon(Icons.person),
+                      title: const Text('Profile'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const Profile(),
+                          ),
+                        );
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.people),
+                      title: const Text('Members & Deposits'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const MealMember(),
+                          ),
+                        );
+                      },
+                    ),
 
-            ListTile(
-              leading: const Icon(Icons.list),
-              title: const Text('Meal planning'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const AddMealPlanning()),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.shop),
-              title: const Text('Shopping'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const AddShopping()),
-                );
-              },
-            ),
+                    ListTile(
+                      leading: const Icon(Icons.list),
+                      title: const Text('Meal planning'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const AddMealPlanning(),
+                          ),
+                        );
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.shop),
+                      title: const Text('Shopping'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const AddShopping(),
+                          ),
+                        );
+                      },
+                    ),
 
-            ListTile(
-              leading: const Icon(Icons.assignment),
-              title: const Text('Meal Requests History'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const MealRequestsScreen()),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
+                    ListTile(
+                      leading: const Icon(Icons.assignment),
+                      title: const Text('Meal Requests History'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const MealRequestsScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
       body: Container(
         color: Theme.of(context).colorScheme.surface,
         child: Column(
           children: [
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.15),
+              color: Theme.of(
+                context,
+              ).colorScheme.primaryContainer.withValues(alpha: 0.15),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -537,20 +701,31 @@ class _ManagerHomeState extends State<ManagerHome> {
                     icon: const Icon(Icons.chevron_left, size: 20),
                     onPressed: () {
                       setState(() {
-                        _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month - 1, 1);
+                        _selectedMonth = DateTime(
+                          _selectedMonth.year,
+                          _selectedMonth.month - 1,
+                          1,
+                        );
                         _listenToData();
                       });
                     },
                   ),
                   Text(
                     "${_monthNames[_selectedMonth.month - 1]} ${_selectedMonth.year}",
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
                   ),
                   IconButton(
                     icon: const Icon(Icons.chevron_right, size: 20),
                     onPressed: () {
                       setState(() {
-                        _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month + 1, 1);
+                        _selectedMonth = DateTime(
+                          _selectedMonth.year,
+                          _selectedMonth.month + 1,
+                          1,
+                        );
                         _listenToData();
                       });
                     },
@@ -560,26 +735,39 @@ class _ManagerHomeState extends State<ManagerHome> {
             ),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.25),
+              color: Theme.of(
+                context,
+              ).colorScheme.primaryContainer.withValues(alpha: 0.25),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
                     "Total Mess Meals: $totalElapsedMeals (Days 1 - $maxElapsedDay)",
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
                   ),
                   OutlinedButton.icon(
                     icon: const Icon(Icons.person, size: 14),
-                    label: const Text("My Personal Meals", style: TextStyle(fontSize: 11)),
+                    label: const Text(
+                      "My Personal Meals",
+                      style: TextStyle(fontSize: 11),
+                    ),
                     style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
                       minimumSize: Size.zero,
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
                     onPressed: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (context) => const UserHome()),
+                        MaterialPageRoute(
+                          builder: (context) => const UserHome(),
+                        ),
                       );
                     },
                   ),
@@ -596,12 +784,19 @@ class _ManagerHomeState extends State<ManagerHome> {
                     crossAxisSpacing: 4.0,
                     childAspectRatio: 0.55,
                   ),
-                  itemCount: DateUtils.getDaysInMonth(_selectedMonth.year, _selectedMonth.month),
+                  itemCount: DateUtils.getDaysInMonth(
+                    _selectedMonth.year,
+                    _selectedMonth.month,
+                  ),
                   itemBuilder: (context, index) {
                     int day = index + 1;
-                    bool isToday = day == today.day && _selectedMonth.year == today.year && _selectedMonth.month == today.month;
+                    bool isToday =
+                        day == today.day &&
+                        _selectedMonth.year == today.year &&
+                        _selectedMonth.month == today.month;
                     bool isSelected = selectedDays.contains(day);
-                    bool isSingleSelected = selectedDay == day && !isMultiSelectMode;
+                    bool isSingleSelected =
+                        selectedDay == day && !isMultiSelectMode;
 
                     return GestureDetector(
                       onTap: () {
@@ -635,51 +830,104 @@ class _ManagerHomeState extends State<ManagerHome> {
                           children: [
                             Container(
                               decoration: BoxDecoration(
-                                color: isMultiSelectMode && isSelected
-                                    ? Theme.of(context).colorScheme.secondary.withValues(alpha: 0.2)
-                                    : isToday
-                                    ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
-                                    : Theme.of(context).colorScheme.surface,
+                                color:
+                                    isMultiSelectMode && isSelected
+                                        ? Theme.of(context)
+                                            .colorScheme
+                                            .secondary
+                                            .withValues(alpha: 0.2)
+                                        : isToday
+                                        ? Theme.of(context).colorScheme.primary
+                                            .withValues(alpha: 0.1)
+                                        : Theme.of(context).colorScheme.surface,
                                 borderRadius: BorderRadius.circular(8.0),
-                                border: isSingleSelected
-                                    ? Border.all(color: Theme.of(context).colorScheme.secondary, width: 2)
-                                    : isToday
-                                    ? Border.all(color: Theme.of(context).colorScheme.primary, width: 2)
-                                    : Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+                                border:
+                                    isSingleSelected
+                                        ? Border.all(
+                                          color:
+                                              Theme.of(
+                                                context,
+                                              ).colorScheme.secondary,
+                                          width: 2,
+                                        )
+                                        : isToday
+                                        ? Border.all(
+                                          color:
+                                              Theme.of(
+                                                context,
+                                              ).colorScheme.primary,
+                                          width: 2,
+                                        )
+                                        : Border.all(
+                                          color:
+                                              Theme.of(
+                                                context,
+                                              ).colorScheme.outlineVariant,
+                                        ),
                               ),
                               child: Padding(
                                 padding: const EdgeInsets.all(4.0),
                                 child: Align(
                                   alignment: Alignment.topLeft,
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         "$day",
                                         style: TextStyle(
-                                          color: isToday ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface,
+                                          color:
+                                              isToday
+                                                  ? Theme.of(
+                                                    context,
+                                                  ).colorScheme.primary
+                                                  : Theme.of(
+                                                    context,
+                                                  ).colorScheme.onSurface,
                                           fontSize: 16,
                                           fontWeight: FontWeight.bold,
                                         ),
                                       ),
                                       Padding(
-                                        padding: const EdgeInsets.only(top: 2.0),
+                                        padding: const EdgeInsets.only(
+                                          top: 2.0,
+                                        ),
                                         child: Text(
                                           () {
-                                            final dayMeals = _monthlyMeals[day] ?? [];
+                                            final dayMeals =
+                                                _monthlyMeals[day] ?? [];
                                             int b = 0, l = 0, d = 0;
                                             int gb = 0, gl = 0, gd = 0;
                                             if (_members.isNotEmpty) {
                                               for (var member in _members) {
-                                                bool defaultOn = _isDefaultMealOn(member, _selectedMonth, day);
-                                                final meal = dayMeals.firstWhere(
-                                                  (m) => m.userId == member.uid,
-                                                  orElse: () => MealModel(
-                                                    id: "", userId: member.uid, messId: "",
-                                                    date: DateTime(_selectedMonth.year, _selectedMonth.month, day),
-                                                    breakfast: false, lunch: defaultOn, dinner: defaultOn,
-                                                  ),
-                                                );
+                                                bool defaultOn =
+                                                    _isDefaultMealOn(
+                                                      member,
+                                                      _selectedMonth,
+                                                      day,
+                                                    );
+                                                final meal = dayMeals
+                                                    .firstWhere(
+                                                      (m) =>
+                                                          m.userId ==
+                                                          member.uid,
+                                                      orElse:
+                                                          () => MealModel(
+                                                            id: "",
+                                                            userId: member.uid,
+                                                            messId: "",
+                                                            date: DateTime(
+                                                              _selectedMonth
+                                                                  .year,
+                                                              _selectedMonth
+                                                                  .month,
+                                                              day,
+                                                            ),
+                                                            breakfast: false,
+                                                            lunch: defaultOn,
+                                                            dinner: defaultOn,
+                                                          ),
+                                                    );
                                                 if (meal.breakfast) b++;
                                                 gb += meal.guestBreakfast;
                                                 if (meal.lunch) l++;
@@ -689,19 +937,36 @@ class _ManagerHomeState extends State<ManagerHome> {
                                               }
                                             } else {
                                               for (var meal in dayMeals) {
-                                                if (meal.breakfast) { b++; gb += meal.guestBreakfast; }
-                                                if (meal.lunch) { l++; gl += meal.guestLunch; }
-                                                if (meal.dinner) { d++; gd += meal.guestDinner; }
+                                                if (meal.breakfast) {
+                                                  b++;
+                                                  gb += meal.guestBreakfast;
+                                                }
+                                                if (meal.lunch) {
+                                                  l++;
+                                                  gl += meal.guestLunch;
+                                                }
+                                                if (meal.dinner) {
+                                                  d++;
+                                                  gd += meal.guestDinner;
+                                                }
                                               }
                                             }
-                                            int totalDayMeals = (b + gb) + (l + gl) + (d + gd);
+                                            int totalDayMeals =
+                                                (b + gb) + (l + gl) + (d + gd);
                                             return "Total: $totalDayMeals\n"
-                                                   "B: ${b + gb}\n"
-                                                   "L: ${l + gl}\n"
-                                                   "D: ${d + gd}";
+                                                "B: ${b + gb}\n"
+                                                "L: ${l + gl}\n"
+                                                "D: ${d + gd}";
                                           }(),
                                           style: TextStyle(
-                                            color: isToday ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface,
+                                            color:
+                                                isToday
+                                                    ? Theme.of(
+                                                      context,
+                                                    ).colorScheme.primary
+                                                    : Theme.of(
+                                                      context,
+                                                    ).colorScheme.onSurface,
                                             fontSize: 12.0,
                                             fontWeight: FontWeight.w800,
                                             height: 1.15,
@@ -721,8 +986,15 @@ class _ManagerHomeState extends State<ManagerHome> {
                                 top: 2,
                                 right: 2,
                                 child: Icon(
-                                  isSelected ? Icons.check_circle : Icons.circle_outlined,
-                                  color: isSelected ? AppColors.success : Theme.of(context).colorScheme.outline,
+                                  isSelected
+                                      ? Icons.check_circle
+                                      : Icons.circle_outlined,
+                                  color:
+                                      isSelected
+                                          ? AppColors.success
+                                          : Theme.of(
+                                            context,
+                                          ).colorScheme.outline,
                                   size: 16,
                                 ),
                               ),
@@ -738,10 +1010,14 @@ class _ManagerHomeState extends State<ManagerHome> {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surface,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(20),
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.1),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.shadow.withValues(alpha: 0.1),
                     blurRadius: 10,
                     spreadRadius: 2,
                   ),
@@ -752,18 +1028,40 @@ class _ManagerHomeState extends State<ManagerHome> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      _buildStatCard("Total Deposit", "৳${totalDeposit.toStringAsFixed(2)}", AppColors.success, onTap: () {
-                        Navigator.push(context, MaterialPageRoute(builder: (context) => const MealMember()));
-                      }),
-                      _buildStatCard("Available Balance", "৳${availableBalance.toStringAsFixed(2)}", Theme.of(context).colorScheme.primary),
+                      _buildStatCard(
+                        "Total Deposit",
+                        "৳${totalDeposit.toStringAsFixed(2)}",
+                        AppColors.success,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const MealMember(),
+                            ),
+                          );
+                        },
+                      ),
+                      _buildStatCard(
+                        "Available Balance",
+                        "৳${availableBalance.toStringAsFixed(2)}",
+                        Theme.of(context).colorScheme.primary,
+                      ),
                     ],
                   ),
                   const SizedBox(height: 10),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      _buildStatCard("Meal Rate", "৳${mealRate.toStringAsFixed(2)}", AppColors.warning),
-                      _buildStatCard("Total Meals", totalMeals.toString(), AppColors.info),
+                      _buildStatCard(
+                        "Meal Rate",
+                        "৳${mealRate.toStringAsFixed(2)}",
+                        AppColors.warning,
+                      ),
+                      _buildStatCard(
+                        "Total Meals",
+                        totalMeals.toString(),
+                        AppColors.info,
+                      ),
                     ],
                   ),
                 ],
@@ -775,7 +1073,12 @@ class _ManagerHomeState extends State<ManagerHome> {
     );
   }
 
-  Widget _buildStatCard(String title, String value, Color color, {VoidCallback? onTap}) {
+  Widget _buildStatCard(
+    String title,
+    String value,
+    Color color, {
+    VoidCallback? onTap,
+  }) {
     return Expanded(
       child: GestureDetector(
         onTap: onTap,

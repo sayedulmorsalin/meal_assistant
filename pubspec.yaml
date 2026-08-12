@@ -1,5 +1,5 @@
-name: mess_management
-description: "A new Flutter project."
+name: meal_assistant
+description: "Meal Assistant - Smart Mess Management System"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -43,6 +43,7 @@ dependencies:
 
   provider: ^6.1.1
   shared_preferences: ^2.3.2
+  url_launcher: ^6.3.1
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.

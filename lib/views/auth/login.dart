@@ -25,12 +25,10 @@ class _LoginState extends State<Login> {
     }
 
     setState(() => _isLoading = true);
-    print("Login: Calling login service...");
     String? error = await _authService.login(
       _emailController.text.trim(),
       _passwordController.text.trim(),
     );
-    print("Login: Service returned with error: $error");
     
     if (!mounted) return;
     setState(() => _isLoading = false);
