@@ -40,8 +40,11 @@ class _LoginState extends State<Login> {
           backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
+    } else {
+      if (Navigator.canPop(context)) {
+        Navigator.popUntil(context, (route) => route.isFirst);
+      }
     }
-    // AuthWrapper in main.dart will handle navigation automatically
   }
 
   @override
@@ -107,10 +110,14 @@ class _LoginState extends State<Login> {
                       const SizedBox(height: 20),
                       TextButton(
                         onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (context) => const Register()),
-                          );
+                          if (Navigator.canPop(context)) {
+                            Navigator.pop(context);
+                          } else {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => const Register()),
+                            );
+                          }
                         },
                         child: Text("Don't have an account? Register",
                           style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold),

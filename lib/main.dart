@@ -3,7 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:meal_assistant/views/landing/landpage.dart';
-import 'package:meal_assistant/views/auth/login.dart';
+import 'package:meal_assistant/views/auth/register.dart';
 import 'package:meal_assistant/models/user_model.dart';
 import 'package:meal_assistant/views/admin/admin_home.dart';
 import 'package:meal_assistant/views/manager/manager_home.dart';
@@ -181,8 +181,8 @@ class AuthWrapper extends StatelessWidget {
         }
         
         if (snapshot.hasData && snapshot.data != null) {
-          return FutureBuilder<DocumentSnapshot>(
-            future: FirebaseFirestore.instance.collection('users').doc(snapshot.data!.uid).get(),
+          return StreamBuilder<DocumentSnapshot>(
+            stream: FirebaseFirestore.instance.collection('users').doc(snapshot.data!.uid).snapshots(),
             builder: (context, userSnapshot) {
               if (userSnapshot.connectionState == ConnectionState.waiting) {
                 return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -238,7 +238,7 @@ class AuthWrapper extends StatelessWidget {
           );
         }
         
-        return const Login();
+        return const Register();
       },
     );
   }

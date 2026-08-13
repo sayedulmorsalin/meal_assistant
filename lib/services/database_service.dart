@@ -484,4 +484,63 @@ class DatabaseService {
     await ref.putFile(imageFile);
     return await ref.getDownloadURL();
   }
+
+  // Delete Mess and all associated data (Cascading Delete)
+  Future<void> deleteMess(String messId) async {
+    // 1. Delete all meals docs for this messId
+    final mealsQuery = await _db.collection('meals').where('messId', isEqualTo: messId).get();
+    for (var doc in mealsQuery.docs) {
+      await doc.reference.delete();
+    }
+
+    // 2. Delete all shopping docs for this messId
+    final shoppingQuery = await _db.collection('shopping').where('messId', isEqualTo: messId).get();
+    for (var doc in shoppingQuery.docs) {
+      await doc.reference.delete();
+    }
+
+    // 3. Delete all requests docs for this messId
+    final requestsQuery = await _db.collection('requests').where('messId', isEqualTo: messId).get();
+    for (var doc in requestsQuery.docs) {
+      await doc.reference.delete();
+    }
+
+    // 4. Delete all join_requests docs for this messId
+    final joinRequestsQuery = await _db.collection('join_requests').where('messId', isEqualTo: messId).get();
+    for (var doc in joinRequestsQuery.docs) {
+      await doc.reference.delete();
+    }
+
+    // 5. Delete all logs docs for this messId
+    final logsQuery = await _db.collection('logs').where('messId', isEqualTo: messId).get();
+    for (var doc in logsQuery.docs) {
+      await doc.reference.delete();
+    }
+
+    // 6. Delete chat messages subcollection
+    final messagesQuery = await _db.collection('messes').doc(messId).collection('messages').get();
+    for (var doc in messagesQuery.docs) {
+      await doc.reference.delete();
+    }
+
+    // 7. Delete meal_plan subcollection
+    final mealPlanQuery = await _db.collection('messes').doc(messId).collection('meal_plan').get();
+    for (var doc in mealPlanQuery.docs) {
+      await doc.reference.delete();
+    }
+
+    // 8. Reset all users affiliated with this messId back to member and clear messId
+    final usersQuery = await _db.collection('users').where('messId', isEqualTo: messId).get();
+    for (var doc in usersQuery.docs) {
+      await doc.reference.update({
+        'messId': null,
+        'role': UserRole.member.toString().split('.').last,
+        'participationRole': null,
+        'deposit': 0.0,
+      });
+    }
+
+    // 9. Delete the mess document itself
+    await _db.collection('messes').doc(messId).delete();
+  }
 }

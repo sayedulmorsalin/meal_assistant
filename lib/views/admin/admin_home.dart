@@ -6,6 +6,9 @@ import 'package:meal_assistant/models/mess_model.dart';
 import 'package:meal_assistant/models/user_model.dart';
 import 'package:meal_assistant/services/auth_service.dart';
 import 'package:meal_assistant/services/database_service.dart';
+import '../landing/landpage.dart';
+import '../manager/manager_home.dart';
+import '../member/user_home.dart';
 import '../../core/app_colors.dart';
 
 class AdminHome extends StatefulWidget {
@@ -33,11 +36,14 @@ class _AdminHomeState extends State<AdminHome> {
   void _loadAdminData() async {
     String? uid = _authService.currentUid;
     if (uid != null) {
-      final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-      if (doc.exists && mounted) {
-        setState(() => _admin = UserModel.fromMap(doc.data()!));
-        _listenToData();
-      }
+      FirebaseFirestore.instance.collection('users').doc(uid).snapshots().listen((doc) {
+        if (doc.exists && mounted) {
+          setState(() => _admin = UserModel.fromMap(doc.data()!));
+          if (_mess == null && _admin?.messId != null) {
+            _listenToData();
+          }
+        }
+      });
     }
   }
 
@@ -91,6 +97,92 @@ class _AdminHomeState extends State<AdminHome> {
     );
   }
 
+  void _confirmDeleteMess() {
+    showDialog(
+      context: context,
+      builder: (dialogCtx) {
+        bool isDeleting = false;
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 28),
+                  SizedBox(width: 8),
+                  Text("Delete Mess?", style: TextStyle(fontWeight: FontWeight.bold)),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Are you sure you want to permanently delete '${_mess?.name ?? 'this mess'}'?",
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    "This action CANNOT be undone. All data will be permanently deleted:\n"
+                    "• All daily meals & member records\n"
+                    "• All shopping expenses & deposits\n"
+                    "• All meal change & join requests\n"
+                    "• Mess chat history & meal plans\n"
+                    "• All members will be removed from this mess",
+                    style: TextStyle(fontSize: 13, color: Colors.redAccent),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isDeleting ? null : () => Navigator.pop(dialogCtx),
+                  child: const Text("Cancel"),
+                ),
+                ElevatedButton.icon(
+                  icon: isDeleting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Icon(Icons.delete_forever, size: 18),
+                  label: Text(isDeleting ? "Deleting..." : "Delete Mess Permanently"),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.error,
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: isDeleting
+                      ? null
+                      : () async {
+                          final nav = Navigator.of(context);
+                          final messenger = ScaffoldMessenger.of(context);
+                          setDialogState(() => isDeleting = true);
+                          if (_mess?.id != null) {
+                            await _dbService.deleteMess(_mess!.id);
+                          }
+                          if (dialogCtx.mounted) {
+                            Navigator.pop(dialogCtx);
+                          }
+                          nav.pushAndRemoveUntil(
+                            MaterialPageRoute(builder: (context) => const Landpage()),
+                            (route) => false,
+                          );
+                          messenger.showSnackBar(
+                            const SnackBar(
+                              content: Text("Mess and all associated data have been permanently deleted."),
+                              backgroundColor: AppColors.error,
+                            ),
+                          );
+                        },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_admin == null || _isLoading) {
@@ -116,11 +208,26 @@ class _AdminHomeState extends State<AdminHome> {
               if (_mess != null) _buildMessInfoCard(),
               const SizedBox(height: 16),
               
-              // New: Button to go back to participation home
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () {
+                    Widget targetHome = _admin?.participationRole == UserRole.manager
+                        ? const ManagerHome()
+                        : const UserHome();
+                    if (Navigator.canPop(context)) {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (context) => targetHome),
+                      );
+                    } else {
+                      Navigator.pushAndRemoveUntil(
+                        context,
+                        MaterialPageRoute(builder: (context) => targetHome),
+                        (route) => false,
+                      );
+                    }
+                  },
                   icon: const Icon(Icons.home),
                   label: Text("Back to $participationHomeName"),
                   style: OutlinedButton.styleFrom(
@@ -197,6 +304,55 @@ class _AdminHomeState extends State<AdminHome> {
                   ...ordinaryMembers.map((m) => _buildMemberCard(m)),
                 ],
               ],
+
+              const Divider(height: 40),
+
+              // Danger Zone Section
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.error.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 22),
+                        SizedBox(width: 8),
+                        Text(
+                          "Danger Zone",
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.error),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      "Permanently delete this mess and all associated records for all members.",
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.delete_forever, size: 18),
+                        label: const Text("Delete Mess & All Info", style: TextStyle(fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.error,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: _confirmDeleteMess,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
             ],
           ),
         ),
