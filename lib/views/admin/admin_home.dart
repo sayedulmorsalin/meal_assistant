@@ -360,6 +360,99 @@ class _AdminHomeState extends State<AdminHome> {
     );
   }
 
+  void _showEditMessNameDialog() {
+    if (_mess == null) return;
+    final controller = TextEditingController(text: _mess!.name);
+    final formKey = GlobalKey<FormState>();
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        bool isSaving = false;
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Row(
+                children: [
+                  Icon(Icons.edit, color: AppColors.primary),
+                  SizedBox(width: 8),
+                  Text("Edit Mess Name", style: TextStyle(fontWeight: FontWeight.bold)),
+                ],
+              ),
+              content: Form(
+                key: formKey,
+                child: TextFormField(
+                  controller: controller,
+                  decoration: const InputDecoration(
+                    labelText: "Mess Name",
+                    hintText: "Enter new mess name",
+                    border: OutlineInputBorder(),
+                  ),
+                  autofocus: true,
+                  validator: (val) {
+                    if (val == null || val.trim().isEmpty) {
+                      return "Mess name cannot be empty";
+                    }
+                    return null;
+                  },
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSaving ? null : () => Navigator.pop(dialogContext),
+                  child: const Text("Cancel"),
+                ),
+                ElevatedButton(
+                  onPressed: isSaving
+                      ? null
+                      : () async {
+                          if (!formKey.currentState!.validate()) return;
+                          final newName = controller.text.trim();
+                          if (newName == _mess!.name) {
+                            Navigator.pop(dialogContext);
+                            return;
+                          }
+                          setDialogState(() => isSaving = true);
+                          final messenger = ScaffoldMessenger.of(context);
+                          try {
+                            await _dbService.updateMessName(_mess!.id, newName, _admin!.uid);
+                            if (dialogContext.mounted) {
+                              Navigator.pop(dialogContext);
+                            }
+                            messenger.showSnackBar(
+                              const SnackBar(
+                                content: Text("Mess name updated successfully!"),
+                                backgroundColor: AppColors.success,
+                              ),
+                            );
+                          } catch (e) {
+                            setDialogState(() => isSaving = false);
+                            messenger.showSnackBar(
+                              SnackBar(
+                                content: Text("Failed to update mess name: $e"),
+                                backgroundColor: AppColors.error,
+                              ),
+                            );
+                          }
+
+                        },
+                  child: isSaving
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text("Save"),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildMessInfoCard() {
     return Card(
       color: Theme.of(context).colorScheme.primaryContainer,
@@ -367,13 +460,28 @@ class _AdminHomeState extends State<AdminHome> {
         padding: const EdgeInsets.all(20.0),
         child: Column(
           children: [
-            Text(
-              _mess!.name,
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.onPrimaryContainer,
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Flexible(
+                  child: Text(
+                    _mess!.name,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                IconButton(
+                  icon: const Icon(Icons.edit, size: 20),
+                  tooltip: 'Edit Mess Name',
+                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                  onPressed: _showEditMessNameDialog,
+                ),
+              ],
             ),
             const SizedBox(height: 8),
             Row(
@@ -408,6 +516,7 @@ class _AdminHomeState extends State<AdminHome> {
       ),
     );
   }
+
 
   Widget _buildEmptyState() {
     return Center(

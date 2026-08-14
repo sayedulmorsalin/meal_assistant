@@ -209,6 +209,15 @@ class DatabaseService {
     }
   }
 
+  // Update Mess Name
+  Future<void> updateMessName(String messId, String newName, String userId) async {
+    await _db.collection('messes').doc(messId).update({
+      'name': newName,
+    });
+    await addLog(messId, userId, "Mess name updated to '$newName'");
+  }
+
+
   // Add Member Deposit — increments totalDeposit in the mess doc, updates user deposit, and logs
   Future<void> addMemberDeposit(String messId, String userId, String userName, double amount) async {
     await _db.collection('messes').doc(messId).update({
