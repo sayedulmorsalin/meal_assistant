@@ -1,6 +1,4 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:meal_assistant/services/database_service.dart';
 import 'package:meal_assistant/services/auth_service.dart';
 import 'package:meal_assistant/models/message_model.dart';
@@ -50,52 +48,19 @@ class _ManagerMessagingState extends State<ManagerMessaging> {
   }
 
   void _sendMessage(String text) async {
-    if (text.isEmpty || _user == null || _user!.messId == null) return;
+    if (text.trim().isEmpty || _user == null || _user!.messId == null) return;
     
     final message = MessageModel(
       id: FirebaseFirestore.instance.collection('messes').doc().id,
       senderId: _user!.uid,
       senderName: _user!.name,
-      text: text,
+      text: text.trim(),
       timestamp: DateTime.now(),
     );
 
     await _dbService.sendMessage(_user!.messId!, message);
     _messageController.clear();
   }
-
-  final ImagePicker _picker = ImagePicker();
-
-  Future<void> _sendImage(ImageSource source) async {
-    if (_user == null || _user!.messId == null) return;
-    try {
-      final XFile? pickedFile = await _picker.pickImage(source: source, imageQuality: 70);
-      if (pickedFile == null) return;
-
-      setState(() => _isLoading = true);
-      String imageUrl = await _dbService.uploadChatImage(File(pickedFile.path), _user!.messId!);
-
-      final message = MessageModel(
-        id: FirebaseFirestore.instance.collection('messes').doc().id,
-        senderId: _user!.uid,
-        senderName: _user!.name,
-        text: '',
-        imageUrl: imageUrl,
-        timestamp: DateTime.now(),
-      );
-
-      await _dbService.sendMessage(_user!.messId!, message);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to send image: $e')));
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _pickImage() async => _sendImage(ImageSource.gallery);
-  Future<void> _takePhoto() async => _sendImage(ImageSource.camera);
 
   @override
   Widget build(BuildContext context) {
@@ -138,6 +103,8 @@ class _ManagerMessagingState extends State<ManagerMessaging> {
 
   Widget _buildMessageBubble(MessageModel message) {
     final isMe = message.senderId == _user!.uid;
+    final senderName = message.senderName.trim().isNotEmpty ? message.senderName.trim() : 'Member';
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
@@ -163,7 +130,7 @@ class _ManagerMessagingState extends State<ManagerMessaging> {
                   Padding(
                     padding: const EdgeInsets.only(bottom: 4.0),
                     child: Text(
-                      message.senderName,
+                      senderName,
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
@@ -171,7 +138,7 @@ class _ManagerMessagingState extends State<ManagerMessaging> {
                       ),
                     ),
                   ),
-                if (message.imageUrl != null)
+                if (message.imageUrl != null && message.imageUrl!.isNotEmpty)
                   ClipRRect(
                     borderRadius: BorderRadius.circular(10.0),
                     child: Image.network(
@@ -220,14 +187,7 @@ class _ManagerMessagingState extends State<ManagerMessaging> {
       ),
       child: Row(
         children: [
-          IconButton(
-            icon: Icon(Icons.camera_alt, color: Theme.of(context).colorScheme.outline),
-            onPressed: _takePhoto, // Now functional
-          ),
-          IconButton(
-            icon: Icon(Icons.image, color: Theme.of(context).colorScheme.outline),
-            onPressed: _pickImage,
-          ),
+          const SizedBox(width: 8),
           Expanded(
             child: TextField(
               controller: _messageController,
@@ -255,4 +215,5 @@ class _ManagerMessagingState extends State<ManagerMessaging> {
     );
   }
 }
+
 
